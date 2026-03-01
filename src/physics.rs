@@ -219,6 +219,18 @@ mod tests {
     }
 
     #[test]
+    fn test_accelerating_from_standstill_distance() {
+        let p = test_params();
+        let d = DriverInput { power_ratio: 0.8, break_ratio: 0.0 };
+        let e = Environment { gradient: 0.0, wind_speed: 0.0 };
+        let s0 = initial_state(0.0);
+        let reference = step_reference(&s0, &p, &d, &e, 10.0);
+        assert_within("standstill distance",
+            &advance_train(&s0, &p, &d, &e, AdvanceTarget::Distance(reference.position.x)),
+            &reference);
+    }
+
+    #[test]
     fn test_braking() {
         let p = test_params();
         let d = DriverInput { power_ratio: 0.0, break_ratio: 0.5 };
@@ -227,6 +239,18 @@ mod tests {
         assert_within("braking",
             &advance_train(&s0, &p, &d, &e, AdvanceTarget::Time(10.0)),
             &step_reference(&s0, &p, &d, &e, 10.0));
+    }
+
+    #[test]
+    fn test_braking_distance() {
+        let p = test_params();
+        let d = DriverInput { power_ratio: 0.0, break_ratio: 0.5 };
+        let e = Environment { gradient: 0.0, wind_speed: 0.0 };
+        let s0 = initial_state(20.0);
+        let reference = step_reference(&s0, &p, &d, &e, 10.0);
+        assert_within("braking distance",
+            &advance_train(&s0, &p, &d, &e, AdvanceTarget::Distance(reference.position.x)),
+            &reference);
     }
 
     #[test]
@@ -241,6 +265,18 @@ mod tests {
     }
 
     #[test]
+    fn test_positive_gradient_distance() {
+        let p = test_params();
+        let d = DriverInput { power_ratio: 0.8, break_ratio: 0.0 };
+        let e = Environment { gradient: 0.02, wind_speed: 0.0 };
+        let s0 = initial_state(10.0);
+        let reference = step_reference(&s0, &p, &d, &e, 10.0);
+        assert_within("positive gradient distance",
+            &advance_train(&s0, &p, &d, &e, AdvanceTarget::Distance(reference.position.x)),
+            &reference);
+    }
+
+    #[test]
     fn test_negative_gradient() {
         let p = test_params();
         let d = DriverInput { power_ratio: 0.8, break_ratio: 0.0 };
@@ -249,5 +285,17 @@ mod tests {
         assert_within("negative gradient",
             &advance_train(&s0, &p, &d, &e, AdvanceTarget::Time(10.0)),
             &step_reference(&s0, &p, &d, &e, 10.0));
+    }
+
+    #[test]
+    fn test_negative_gradient_distance() {
+        let p = test_params();
+        let d = DriverInput { power_ratio: 0.8, break_ratio: 0.0 };
+        let e = Environment { gradient: -0.02, wind_speed: 0.0 };
+        let s0 = initial_state(10.0);
+        let reference = step_reference(&s0, &p, &d, &e, 10.0);
+        assert_within("negative gradient distance",
+            &advance_train(&s0, &p, &d, &e, AdvanceTarget::Distance(reference.position.x)),
+            &reference);
     }
 }
