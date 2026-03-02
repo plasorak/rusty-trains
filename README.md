@@ -105,7 +105,7 @@ simulation:
       parquet_file: berth_timing.parquet
 ```
 
-See `config_mixed.yaml` for a complete example.
+See `config/config_mixed.yaml` for a complete example.
 
 ## Output columns
 
@@ -121,20 +121,22 @@ See `config_mixed.yaml` for a complete example.
 
 ```sh
 # Physics only (2 trains)
-cargo run --release -- config_physics.yaml output_physics.parquet
+cargo run --release -- config/config_physics.yaml output_physics.parquet
 
 # Timing only (2 trains)
-cargo run --release -- config_timing.yaml output_timing.parquet
+cargo run --release -- config/config_timing.yaml output_timing.parquet
 
 # Mixed (1 physics + 2 timing trains)
-cargo run --release -- config_mixed.yaml output_mixed.parquet
+cargo run --release -- config/config_mixed.yaml output_mixed.parquet
 ```
 
 ## Python helper scripts
 
+Scripts live in `scripts/`.
+
 ### Generate sample timing data
 
-`make_timing_parquet.py` generates a synthetic berth timing Parquet file
+`scripts/make_timing_parquet.py` generates a synthetic berth timing Parquet file
 that matches the expected schema:
 
 | Column | Type | Description |
@@ -146,24 +148,24 @@ that matches the expected schema:
 
 ```sh
 # Default: trains 1A23, 2B45, 3C67 × 12 berths each
-uv run make_timing_parquet.py berth_timing.parquet
+uv run scripts/make_timing_parquet.py berth_timing.parquet
 
 # Custom trains and berth count
-uv run make_timing_parquet.py berth_timing.parquet --trains 1A23 2B45 --berths 20
+uv run scripts/make_timing_parquet.py berth_timing.parquet --trains 1A23 2B45 --berths 20
 ```
 
-### Run a large-scale simulation
+### Generate a large-scale config
 
-`run_100trains.py` generates a config for N physics trains with randomised
-parameters and runs the simulation. Defaults to 100 trains for 1 hour at
-1-second steps (360,000 output rows).
+`scripts/run_100trains.py` generates a config for N physics trains with
+randomised parameters and prints the command to run it. Defaults to 100 trains
+for 1 hour at 1-second steps (360,000 output rows).
 
 ```sh
-uv run run_100trains.py
+uv run scripts/run_100trains.py
 
 # Custom options
-uv run run_100trains.py --trains 50 --dt 0.5 --duration 7200
-uv run run_100trains.py --help
+uv run scripts/run_100trains.py --trains 50 --dt 0.5 --duration 2
+uv run scripts/run_100trains.py --help
 ```
 
 ## Running the tests

@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-"""Generate a 100-train physics config and run a 1-hour simulation.
+"""Generate a 100-train physics config and print the command to run it.
 
 Usage
 -----
-    uv run run_100trains.py
-    uv run run_100trains.py --trains 50 --dt 0.5 --output my_output.parquet
+    uv run scripts/run_100trains.py
+    uv run scripts/run_100trains.py --trains 50 --dt 0.5 --output my_output.parquet
 """
 
 import random
-import subprocess
 from pathlib import Path
 from typing import Annotated
 
@@ -62,38 +61,35 @@ app = typer.Typer(add_completion=False)
 
 @app.command()
 def main(
-    config: Annotated[Path, typer.Option(help="Config YAML file to write")] = Path("config_100trains.yaml"),
+    config: Annotated[Path, typer.Option(help="Config YAML file to write")] = Path("config/config_100trains.yaml"),
     output: Annotated[Path, typer.Option(help="Output Parquet file")] = Path("output_100trains.parquet"),
     trains: Annotated[int, typer.Option(help="Number of trains")] = 100,
     dt: Annotated[float, typer.Option(help="Time step in seconds")] = 1.0,
     duration: Annotated[float, typer.Option(help="Simulation duration in hours")] = 1.0,
     seed: Annotated[int, typer.Option(help="Random seed for reproducibility")] = SEED,
 ) -> None:
-    """Generate a physics config for N trains and run a simulation."""
+    """Generate a physics config for N trains and print the command to run it."""
     rng = random.Random(seed)
 
     simulation = {
         "simulation": {
             "time_step_s": dt,
-            "duration_s": duration*3_600,
+            "duration_s": duration * 3_600,
             "trains": [make_train(i, rng) for i in range(1, trains + 1)],
         }
     }
 
+    config.parent.mkdir(parents=True, exist_ok=True)
     config.write_text(yaml.dump(simulation, default_flow_style=False, sort_keys=False))
-    expected_rows = int(duration / dt) * trains
+    expected_rows = int(duration * 3_600 / dt) * trains
     typer.echo(
         f"Wrote {config}  "
-        f"({trains} trains, {duration}s @ {dt}s steps, ~{expected_rows:,} output rows)"
+        f"({trains} trains, {duration}h @ {dt}s steps, ~{expected_rows:,} output rows)"
     )
 
-    binary = Path("target/release/rusty-trains")
-    if not binary.exists():
-        typer.echo("Release binary not found — building...")
-        subprocess.run(["cargo", "build", "--release"], check=True)
-
-    typer.echo(f"Running simulation → {output}")
-    subprocess.run([str(binary), str(config), str(output)], check=True)
+    typer.echo("\nTo run the simulation:")
+    typer.echo(f"  cargo build --release")
+    typer.echo(f"  ./target/release/rusty-trains {config} {output}")
 
 
 if __name__ == "__main__":
