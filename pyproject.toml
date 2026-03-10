@@ -17,6 +17,11 @@ make-timing-parquet = "make_timing_parquet:main"
 run-100trains = "run_100trains:app"
 plot = "plot:main"
 
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
+
 [project]
 name = "rusty-trains"
 version = "0.1.0"
@@ -33,3 +38,7 @@ dependencies = [
     "pydantic-xml>=2.0",
     "xmlschema>=3.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["python/tests"]
+pythonpath = ["python"]
