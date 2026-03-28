@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a sample berth timing Parquet file for rusty-trains.
+"""Generate a sample berth timing Parquet file for hs-trains.
 
 Each row represents a berth step event: the moment a train's description
 moved into a new berth on the signalling panel.

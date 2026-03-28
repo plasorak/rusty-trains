@@ -9,7 +9,7 @@ from xml.etree.ElementTree import ElementTree, fromstring, indent
 import typer
 from nicegui import events, ui
 
-from rusty_trains.model.rollingstock import (
+from hs_trains.model.rollingstock import (
     Brakes, BrakeSystem, DaviesFormula, DecelerationCurve, Designator,
     DrivingResistance, DrivingResistanceInfo, Engine, Formation, Formations,
     PowerMode, RailML, Rollingstock, TractiveEffortCurve, TractionData,
@@ -17,7 +17,7 @@ from rusty_trains.model.rollingstock import (
     TrainOrder, TrainTractionMode, Value, ValueLine, ValueTable, Vehicle,
     VehiclePart, Vehicles,
 )
-from rusty_trains.utils import validate_xml
+from hs_trains.utils import validate_xml
 
 
 # ---------------------------------------------------------------------------
