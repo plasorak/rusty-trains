@@ -70,6 +70,10 @@ Terminal velocity is found via bisection (52 iterations). Integration uses close
 
 YAML config files live in `config/`. See `config/config_mixed.yaml` for a minimal mixed physics+timing example. Timing trains reference Parquet files with schema `(train_id, berth_id, timestamp_ms, position_m)`.
 
+## Git workflow
+
+At the start of every coding task, before making any changes, run `/start-task` to ensure you are working on a fresh branch from `main`. When the work is done, commit, push, and open a PR against `main`.
+
 ## Coding philosophy
 
 - **Simplicity first** — solve the problem at hand, not a generalised version of it. Three similar lines of code are better than a premature abstraction.
