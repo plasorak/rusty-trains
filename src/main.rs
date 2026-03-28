@@ -21,7 +21,7 @@ use rayon::prelude::*;
 /// Time is always the outer loop: all trains advance together each step.
 /// Results are flushed to Parquet in row-group batches to bound memory use.
 #[derive(Parser)]
-#[command(name = "rusty-trains", version)]
+#[command(name = "hs-trains", version)]
 struct Cli {
     /// Path to the simulation config YAML file.
     config: std::path::PathBuf,

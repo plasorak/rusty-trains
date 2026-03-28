@@ -17,7 +17,7 @@ from pathlib import Path
 from xml.etree.ElementTree import indent, fromstring, ElementTree
 
 import xmlschema
-from rusty_trains.model.rollingstock import (
+from hs_trains.model.rollingstock import (
     BrakeEffortCurve,
     Brakes,
     DaviesFormula,

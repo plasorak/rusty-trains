@@ -3,14 +3,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["python/rusty_trains"]
+packages = ["python/hs_trains"]
 
 [project.scripts]
-make-railml-rollingstock = "rusty_trains.make_railml_rollingstock:main"
-make-timing-parquet = "rusty_trains.make_timing_parquet:main"
-run-100trains = "rusty_trains.run_100trains:app"
-plot = "rusty_trains.plot:main"
-rollingstock-editor = "rusty_trains.rollingstock_ui:launch"
+make-railml-rollingstock = "hs_trains.make_railml_rollingstock:main"
+make-timing-parquet = "hs_trains.make_timing_parquet:main"
+run-100trains = "hs_trains.run_100trains:app"
+plot = "hs_trains.plot:main"
+rollingstock-editor = "hs_trains.rollingstock_ui:launch"
 
 [dependency-groups]
 dev = [
@@ -18,7 +18,7 @@ dev = [
 ]
 
 [project]
-name = "rusty-trains"
+name = "hs-trains"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
