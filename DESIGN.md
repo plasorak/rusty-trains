@@ -1,8 +1,8 @@
-# Rusty-Trains — Design Document
+# hs-trains — Design Document
 
 ## Overview
 
-Rusty-Trains is a train network simulator written in Rust. It models the motion of one or more trains using either realistic physics or real berth timing data, and supports mixed simulations where both kinds of train coexist. Simulation results are streamed to a Parquet file for downstream analysis.
+hs-trains is a train network simulator written in Rust. It models the motion of one or more trains using either realistic physics or real berth timing data, and supports mixed simulations where both kinds of train coexist. Simulation results are streamed to a Parquet file for downstream analysis.
 
 ---
 

@@ -1,4 +1,4 @@
-# AGENTS.md — Coding Agent Guidelines for rusty-trains
+# AGENTS.md — Coding Agent Guidelines for hs-trains
 
 This file provides authoritative guidance for agentic coding tools (Claude Code, Copilot, Cursor, etc.)
 working in this repository.

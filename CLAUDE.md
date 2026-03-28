@@ -31,7 +31,7 @@ uv run scripts/plot.py
 
 ## Architecture
 
-Rusty-trains is a **Discrete Event Simulator (DES)** for train networks. Instead of a fixed time-step loop, time jumps event-to-event. Two train types coexist: physics-based (Davis equation) and timing-based (historical Parquet data).
+hs-trains is a **Discrete Event Simulator (DES)** for train networks. Instead of a fixed time-step loop, time jumps event-to-event. Two train types coexist: physics-based (Davis equation) and timing-based (historical Parquet data).
 
 ### Key modules
 
