@@ -33,7 +33,6 @@ dependencies = [
     "pydantic>=2.0",
     "pydantic-xml>=2.0",
     "xmlschema>=3.0",
-    "watchdog>=6.0.0",
 ]
 
 [tool.pytest.ini_options]
