@@ -1,4 +1,4 @@
-"""Shared utilities for the rusty-trains Python tooling."""
+"""Shared utilities for the hs-trains Python tooling."""
 
 from functools import cache
 from pathlib import Path

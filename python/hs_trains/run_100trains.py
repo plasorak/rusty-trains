@@ -92,7 +92,7 @@ def main(
 
     typer.echo("\nTo run the simulation:")
     typer.echo(f"  cargo build --release")
-    typer.echo(f"  ./target/release/rusty-trains {config} {output}")
+    typer.echo(f"  ./target/release/hs-trains {config} {output}")
 
 
 if __name__ == "__main__":

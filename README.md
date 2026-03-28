@@ -1,4 +1,4 @@
-# rusty-trains
+# hs-trains
 
 A train network simulator written in Rust. Physics and timing trains can be freely mixed in a single simulation — time is always the outer loop, so every train advances together at each step.
 
@@ -15,12 +15,12 @@ A train network simulator written in Rust. Physics and timing trains can be free
 cargo build --release
 ```
 
-The binary is written to `target/release/rusty-trains`.
+The binary is written to `target/release/hs-trains`.
 
 ## Usage
 
 ```
-rusty-trains <config.yaml> <output.parquet>
+hs-trains <config.yaml> <output.parquet>
 ```
 
 | Argument | Description |
@@ -28,7 +28,7 @@ rusty-trains <config.yaml> <output.parquet>
 | `<config.yaml>` | Simulation configuration (see below) |
 | `<output.parquet>` | Destination for the result table |
 
-Run `rusty-trains --help` for a brief usage summary.
+Run `hs-trains --help` for a brief usage summary.
 
 ## Configuration
 
