@@ -23,9 +23,13 @@ def validate_xml(xml_str: str) -> list[str]:
     """Validate a RailML 3.3 XML string against the XSD.
 
     Returns a list of error message strings, empty if the document is valid.
+    Raises FileNotFoundError if the XSD schema file is not present.
     """
     if not _SCHEMA_PATH.exists():
-        return ["XSD schema not found — cannot validate."]
+        raise FileNotFoundError(
+            f"RailML XSD not found at {_SCHEMA_PATH}. "
+            "Clone the railML schema repository into railml/ to enable validation."
+        )
     try:
         xs = _load_schema()
         return [str(e) for e in xs.iter_errors(xml_str)]

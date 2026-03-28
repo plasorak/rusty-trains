@@ -6,6 +6,7 @@ import xml.etree.ElementTree as ET
 from decimal import Decimal
 from xml.etree.ElementTree import ElementTree, fromstring, indent
 
+import typer
 from nicegui import events, ui
 
 from rusty_trains.model.rollingstock import (
@@ -28,7 +29,7 @@ def _dec(v) -> Decimal | None:
         return None
     try:
         return Decimal(str(v))
-    except Exception:
+    except (ValueError, ArithmeticError):
         return None
 
 
@@ -59,10 +60,11 @@ def _make_xml(vehicles: list[Vehicle], formations: list[Formation]) -> str:
 # ---------------------------------------------------------------------------
 
 class _State:
-    vehicles: list[Vehicle] = []
-    formations: list[Formation] = []
-    vehicle_idx: int | None = None
-    formation_idx: int | None = None
+    def __init__(self) -> None:
+        self.vehicles: list[Vehicle] = []
+        self.formations: list[Formation] = []
+        self.vehicle_idx: int | None = None
+        self.formation_idx: int | None = None
 
 state = _State()
 
@@ -72,6 +74,9 @@ state = _State()
 # ---------------------------------------------------------------------------
 
 class _VehicleDraft:
+    def __init__(self) -> None:
+        self.reset(None, 0)
+
     def reset(self, v: Vehicle | None, n: int) -> None:
         vid = v.id if v else f"vehicle_{n + 1:03d}"
         self.id         = vid
@@ -218,6 +223,9 @@ vd = _VehicleDraft()
 # ---------------------------------------------------------------------------
 
 class _FormationDraft:
+    def __init__(self) -> None:
+        self.reset(None, 0)
+
     def reset(self, f: Formation | None, n: int) -> None:
         self.id       = f.id if f else f"formation_{n + 1:03d}"
         self.speed    = float(f.speed or 120)        if f else 120.0
@@ -615,6 +623,9 @@ def formation_form() -> None:
         ui.button("Save Formation", on_click=_save).props("color=primary").classes("mt-4")
 
 
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
 # ---------------------------------------------------------------------------
 # Import / Export dialog
 # ---------------------------------------------------------------------------
@@ -627,7 +638,14 @@ def _open_import_export() -> None:
 
         async def _on_upload(e: events.UploadEventArguments) -> None:
             try:
-                railml = RailML.from_xml(await e.file.read())
+                data = await e.file.read()
+                if len(data) > MAX_UPLOAD_BYTES:
+                    ui.notify(
+                        f"File too large ({len(data) // 1024} KB); limit is {MAX_UPLOAD_BYTES // 1024 // 1024} MB.",
+                        color="negative",
+                    )
+                    return
+                railml = RailML.from_xml(data)
                 state.vehicles = (
                     railml.rollingstock.vehicles.vehicles
                     if railml.rollingstock and railml.rollingstock.vehicles else []
@@ -667,7 +685,11 @@ def _open_import_export() -> None:
             except Exception as ex:
                 ui.notify(f"XML generation failed: {ex}", color="negative")
                 return
-            errors = validate_xml(xml_str)
+            try:
+                errors = validate_xml(xml_str)
+            except FileNotFoundError as exc:
+                ui.notify(str(exc), color="warning", timeout=6000)
+                errors = []
             if errors:
                 ui.notify(
                     f"Validation: {len(errors)} error(s) — {errors[0][:120]}",
@@ -733,16 +755,20 @@ def build_page() -> None:
 # Entry point
 # ---------------------------------------------------------------------------
 
-def launch() -> None:
-    """Entry point for the `rollingstock-editor` console script."""
-
+def _run(port: int = typer.Option(8080, help="Port to serve the UI on")) -> None:
+    """Start the RailML 3.3 Rollingstock Builder UI."""
     @ui.page("/")
     def index() -> None:
         vd.reset(None, 0)
         fd.reset(None, 0)
         build_page()
 
-    ui.run(title="RailML 3.3 Rollingstock Builder", port=8080, reload=False)
+    ui.run(title="RailML 3.3 Rollingstock Builder", port=port, reload=False)
+
+
+def launch() -> None:
+    """Entry point for the `rollingstock-editor` console script."""
+    typer.run(_run)
 
 
 if __name__ == "__main__":
