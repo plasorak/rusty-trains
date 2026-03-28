@@ -364,6 +364,7 @@ fn run_simulation(trains: &[TrainConfig], dt: f64, duration: f64, output: &std::
             n,
             vec![
                 Series::new("train_id".into(),          &train_id_data).into(),
+                Series::new("event_kind".into(),        &event_kind_data).into(),
                 Series::new("time_s".into(),            &time_s_data).into(),
                 Series::new("position_m".into(),        &position_m_data).into(),
                 Series::new("speed_kmh".into(),         &speed_kmh_data).into(),
