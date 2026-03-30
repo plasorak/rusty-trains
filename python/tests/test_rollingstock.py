@@ -249,7 +249,70 @@ class TestTrainDrivingResistance:
             )
         )
         el = _xml(tr)
-        assert el.find(_clark("info")) is not None
+        info = el.find(_clark("info"))
+        assert info is not None
+        assert info.get("airDragCoefficient") == "0.7"
+        assert info.get("crossSectionArea") == "10.0"
+        assert info.get("rollingResistance") == "1.0"
+
+    def test_round_trip(self):
+        original = TrainDrivingResistance(
+            tunnel_factor=Decimal("1.3"),
+            davies_formula_factors=DaviesFormula(
+                constant_factor_a=Decimal("3800"),
+                speed_dependent_factor_b=Decimal("45"),
+                square_speed_dependent_factor_c=Decimal("2.5"),
+            ),
+        )
+        xml_str = original.to_xml(encoding="unicode", exclude_none=True)
+        restored = TrainDrivingResistance.from_xml(xml_str)
+        assert restored.tunnel_factor == Decimal("1.3")
+        assert restored.davies_formula_factors.constant_factor_a == Decimal("3800")
+
+
+class TestDrivingResistanceRoundTrip:
+    def test_round_trip(self):
+        original = DrivingResistance(tunnel_factor=Decimal("1.1"))
+        xml_str = original.to_xml(encoding="unicode", exclude_none=True)
+        restored = DrivingResistance.from_xml(xml_str)
+        assert restored.tunnel_factor == Decimal("1.1")
+
+
+# ---------------------------------------------------------------------------
+# PowerMode / TrainTractionMode
+# ---------------------------------------------------------------------------
+
+
+class TestPowerMode:
+    def test_xml_tag(self):
+        el = _xml(PowerMode(mode="electric"))
+        assert el.tag == _clark("powerMode")
+
+    def test_shared_fields(self):
+        # mode and isPrimaryMode come from the shared base.
+        pm = PowerMode(mode="battery", is_primary_mode=False)
+        el = _xml(pm)
+        assert el.get("mode") == "battery"
+        assert el.get("isPrimaryMode") == "false"
+
+
+class TestTrainTractionMode:
+    def test_xml_tag(self):
+        el = _xml(TrainTractionMode(mode="diesel"))
+        assert el.tag == _clark("tractionMode")
+
+    def test_shared_fields(self):
+        tm = TrainTractionMode(mode="electric", is_primary_mode=False)
+        el = _xml(tm)
+        assert el.get("mode") == "electric"
+        assert el.get("isPrimaryMode") == "false"
+
+    def test_round_trip(self):
+        original = TrainTractionMode(mode="diesel", is_primary_mode=True)
+        xml_str = original.to_xml(encoding="unicode", exclude_none=True)
+        restored = TrainTractionMode.from_xml(xml_str)
+        assert restored.mode == "diesel"
+        assert restored.is_primary_mode is True
 
 
 # ---------------------------------------------------------------------------
@@ -383,34 +446,6 @@ class TestFormation:
         tm = el.find(_clark("tractionMode"))
         assert tm is not None
         assert tm.get("mode") == "diesel"
-
-    def test_power_mode_xml_tag(self):
-        el = _xml(PowerMode(mode="electric"))
-        assert el.tag == _clark("powerMode")
-
-    def test_train_traction_mode_xml_tag(self):
-        el = _xml(TrainTractionMode(mode="diesel"))
-        assert el.tag == _clark("tractionMode")
-
-    def test_power_mode_shared_fields(self):
-        # mode and isPrimaryMode come from the shared base.
-        pm = PowerMode(mode="battery", is_primary_mode=False)
-        el = _xml(pm)
-        assert el.get("mode") == "battery"
-        assert el.get("isPrimaryMode") == "false"
-
-    def test_train_traction_mode_shared_fields(self):
-        tm = TrainTractionMode(mode="electric", is_primary_mode=False)
-        el = _xml(tm)
-        assert el.get("mode") == "electric"
-        assert el.get("isPrimaryMode") == "false"
-
-    def test_train_traction_mode_round_trip(self):
-        original = TrainTractionMode(mode="diesel", is_primary_mode=True)
-        xml_str = original.to_xml(encoding="unicode", exclude_none=True)
-        restored = TrainTractionMode.from_xml(xml_str)
-        assert restored.mode == "diesel"
-        assert restored.is_primary_mode is True
 
     def test_train_resistance_davies_formula(self):
         tr = TrainDrivingResistance(
