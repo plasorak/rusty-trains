@@ -188,6 +188,10 @@ class TestDaviesFormula:
 
 
 class TestDrivingResistance:
+    def test_xml_tag(self):
+        el = _xml(DrivingResistance())
+        assert el.tag == _clark("drivingResistance")
+
     def test_tunnel_factor_omitted_when_none(self):
         dr = DrivingResistance(
             info=DrivingResistanceInfo(
@@ -200,9 +204,7 @@ class TestDrivingResistance:
         assert el.get("tunnelFactor") is None
 
     def test_tunnel_factor_present(self):
-        dr = DrivingResistance(
-            tunnel_factor=Decimal("1.5"),
-        )
+        dr = DrivingResistance(tunnel_factor=Decimal("1.5"))
         el = _xml(dr)
         assert el.get("tunnelFactor") == "1.5"
 
@@ -220,6 +222,97 @@ class TestDrivingResistance:
         assert info.get("airDragCoefficient") == "0.8"
         assert info.get("crossSectionArea") == "9.0"
         assert info.get("rollingResistance") == "1.2"
+
+    def test_no_davies_formula_field(self):
+        # DrivingResistance must not expose daviesFormulaFactors — that belongs
+        # only to TrainDrivingResistance.
+        assert not hasattr(DrivingResistance(), "davies_formula_factors")
+
+
+class TestTrainDrivingResistance:
+    def test_xml_tag(self):
+        el = _xml(TrainDrivingResistance())
+        assert el.tag == _clark("trainResistance")
+
+    def test_inherited_tunnel_factor(self):
+        # tunnel_factor comes from the shared base — verify it serialises correctly.
+        tr = TrainDrivingResistance(tunnel_factor=Decimal("2.1"))
+        el = _xml(tr)
+        assert el.get("tunnelFactor") == "2.1"
+
+    def test_inherited_info_child(self):
+        tr = TrainDrivingResistance(
+            info=DrivingResistanceInfo(
+                air_drag_coefficient=Decimal("0.7"),
+                cross_section_area=Decimal("10.0"),
+                rolling_resistance=Decimal("1.0"),
+            )
+        )
+        el = _xml(tr)
+        info = el.find(_clark("info"))
+        assert info is not None
+        assert info.get("airDragCoefficient") == "0.7"
+        assert info.get("crossSectionArea") == "10.0"
+        assert info.get("rollingResistance") == "1.0"
+
+    def test_round_trip(self):
+        original = TrainDrivingResistance(
+            tunnel_factor=Decimal("1.3"),
+            davies_formula_factors=DaviesFormula(
+                constant_factor_a=Decimal("3800"),
+                speed_dependent_factor_b=Decimal("45"),
+                square_speed_dependent_factor_c=Decimal("2.5"),
+            ),
+        )
+        xml_str = original.to_xml(encoding="unicode", exclude_none=True)
+        restored = TrainDrivingResistance.from_xml(xml_str)
+        assert restored.tunnel_factor == Decimal("1.3")
+        assert restored.davies_formula_factors.constant_factor_a == Decimal("3800")
+
+
+class TestDrivingResistanceRoundTrip:
+    def test_round_trip(self):
+        original = DrivingResistance(tunnel_factor=Decimal("1.1"))
+        xml_str = original.to_xml(encoding="unicode", exclude_none=True)
+        restored = DrivingResistance.from_xml(xml_str)
+        assert restored.tunnel_factor == Decimal("1.1")
+
+
+# ---------------------------------------------------------------------------
+# PowerMode / TrainTractionMode
+# ---------------------------------------------------------------------------
+
+
+class TestPowerMode:
+    def test_xml_tag(self):
+        el = _xml(PowerMode(mode="electric"))
+        assert el.tag == _clark("powerMode")
+
+    def test_shared_fields(self):
+        # mode and isPrimaryMode come from the shared base.
+        pm = PowerMode(mode="battery", is_primary_mode=False)
+        el = _xml(pm)
+        assert el.get("mode") == "battery"
+        assert el.get("isPrimaryMode") == "false"
+
+
+class TestTrainTractionMode:
+    def test_xml_tag(self):
+        el = _xml(TrainTractionMode(mode="diesel"))
+        assert el.tag == _clark("tractionMode")
+
+    def test_shared_fields(self):
+        tm = TrainTractionMode(mode="electric", is_primary_mode=False)
+        el = _xml(tm)
+        assert el.get("mode") == "electric"
+        assert el.get("isPrimaryMode") == "false"
+
+    def test_round_trip(self):
+        original = TrainTractionMode(mode="diesel", is_primary_mode=True)
+        xml_str = original.to_xml(encoding="unicode", exclude_none=True)
+        restored = TrainTractionMode.from_xml(xml_str)
+        assert restored.mode == "diesel"
+        assert restored.is_primary_mode is True
 
 
 # ---------------------------------------------------------------------------
