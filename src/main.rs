@@ -1,12 +1,7 @@
-mod physics;
-mod model;
-mod rollingstock;
-mod timing;
-mod scheduler;
-
-use model::{SimulatedState, TrainDescription, Environment, DriverInput, Position};
-use physics::{advance_train, AdvanceTarget};
-use timing::TimingTrace;
+use hs_trains::model::{SimulatedState, TrainDescription, Environment, DriverInput, Position};
+use hs_trains::physics::{advance_train, AdvanceTarget};
+use hs_trains::timing::TimingTrace;
+use hs_trains::{rollingstock, scheduler};
 use polars::prelude::*;
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
