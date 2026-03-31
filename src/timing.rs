@@ -3,32 +3,31 @@ use std::fs::File;
 use std::path::Path;
 use std::sync::Arc;
 
-/// A normalized, interpolatable position trace for a single timing train.
-///
-/// Timestamps are converted to seconds elapsed from the first record, so
-/// the trace always starts at `t = 0` regardless of the original Unix epoch.
+/// An interpolatable position trace for a single timing train, indexed by
+/// sectional running time (seconds elapsed from the train's journey start).
 pub struct TimingTrace {
     times_s: Vec<f64>,
     positions_m: Vec<f64>,
 }
 
 impl TimingTrace {
-    /// Load and normalize timing data from a Parquet file for `train_id`.
+    /// Load timing data from a Parquet file for `train_id`.
     ///
     /// # Parquet file format
     ///
     /// Each row represents a single berth step event — the moment a train's
     /// description stepped into the named berth on the signalling panel.
     ///
-    /// | Column         | Parquet type | Description                                           |
-    /// |----------------|--------------|-------------------------------------------------------|
-    /// | `train_id`     | UTF8         | Train identifier / headcode, e.g. `"1A23"`            |
-    /// | `berth_id`     | UTF8         | Berth name, matching `BerthDescription::name`         |
-    /// | `timestamp_ms` | INT64        | Unix epoch timestamp in **milliseconds**              |
-    /// | `position_m`   | DOUBLE       | Along-track distance from route origin, in **metres** |
+    /// | Column      | Parquet type | Description                                           |
+    /// |-------------|--------------|-------------------------------------------------------|
+    /// | `train_id`  | UTF8         | Train identifier / headcode, e.g. `"1A23"`            |
+    /// | `berth_id`  | UTF8         | Berth name, matching `BerthDescription::name`         |
+    /// | `elapsed_s` | DOUBLE       | Travel time for **this berth** in **seconds**  |
+    /// | `length_m`  | DOUBLE       | Length of **this berth** in **metres**         |
     ///
-    /// Rows do not need to be pre-sorted; the loader sorts by `timestamp_ms`.
-    /// Rows with null values in `timestamp_ms` or `position_m` are skipped.
+    /// Rows must be in berth order (sequential along the route).
+    /// The loader accumulates both columns to build running-time and position axes.
+    /// Rows with null values in `elapsed_s` or `length_m` are skipped.
     ///
     /// # Limitations
     ///
@@ -48,34 +47,26 @@ impl TimingTrace {
             .collect();
         let df = df.filter(&mask)?;
 
-        // Sort chronologically.
-        let df = df.sort(["timestamp_ms"], SortMultipleOptions::default())?;
+        let elapsed = df.column("elapsed_s")?.f64()?;
+        let positions = df.column("length_m")?.f64()?;
 
-        let timestamps = df.column("timestamp_ms")?.i64()?;
-        let positions = df.column("position_m")?.f64()?;
-
-        let mut times_ms: Vec<i64> = Vec::with_capacity(df.height());
+        let mut times_s: Vec<f64> = Vec::with_capacity(df.height());
         let mut positions_m: Vec<f64> = Vec::with_capacity(df.height());
+        let mut running_time = 0.0_f64;
+        let mut running_pos = 0.0_f64;
         for i in 0..df.height() {
-            let Some(ts) = timestamps.get(i) else {
+            let Some(berth_time) = elapsed.get(i) else {
                 continue;
             };
-            let Some(pos) = positions.get(i) else {
+            let Some(berth_len) = positions.get(i) else {
                 continue;
             };
-            times_ms.push(ts);
-            positions_m.push(pos);
+            times_s.push(running_time);
+            positions_m.push(running_pos);
+            running_time += berth_time;
+            running_pos += berth_len;
         }
 
-        if times_ms.is_empty() {
-            return Ok(Self {
-                times_s: vec![],
-                positions_m: vec![],
-            });
-        }
-
-        let t0 = times_ms[0];
-        let times_s = times_ms.iter().map(|&t| (t - t0) as f64 / 1000.0).collect();
         Ok(Self {
             times_s,
             positions_m,
