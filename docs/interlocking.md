@@ -509,3 +509,18 @@ A signal box is the fail-safe interlocking computer responsible for a set of ass
 | Release trigger | `byOccupation`, `byOperator`, `byTrainStandstill`, `afterVacation` |
 
 ---
+
+## Relationship to hs-trains
+
+Interlocking is not yet parsed by hs-trains. The timing-based train model already uses berth occupancy implicitly (via Parquet trace data), but no live conflict detection or route-setting logic exists yet. When interlocking support is added, the key elements will be:
+
+| Interlocking element | Simulation use |
+|---|---|
+| `tvdSection` | Berth occupancy — conflict detection, headway enforcement, timing-train position reporting |
+| `trainNumberField` | Headcode propagation (TD stepping) for timing-based trains |
+| `route` | Path finding and conflict resolution between physics-based trains |
+| `overlap` | Safety margin beyond the exit signal — required before a route can be set |
+| `routeReleaseGroupRear` | Partial route release as a train clears successive TVD sections |
+| `signalIL` | Signal aspects blocking or releasing train movement |
+| `switchIL` | Route-setting: locking a switch in the required position before clearing the signal |
+| `signalBox` | Authority boundary — which interlocking is responsible for a given set of routes |
