@@ -2,8 +2,6 @@
 
 This document is a deep dive into the RailML 3.3 `infrastructure` sub-schema — the part that describes the physical and logical layout of a railway network: tracks, switches, signals, balises, platforms, electrification, and more.
 
-hs-trains does not yet parse infrastructure XML, but understanding this schema is the prerequisite for adding signal-aware simulation and route conflict logic. See [railml.md](railml.md) for the rollingstock sub-schema and [rollingstock.md](rollingstock.md) for the Python tooling.
-
 ---
 
 ## Namespace and Document Root
