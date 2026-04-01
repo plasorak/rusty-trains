@@ -97,14 +97,18 @@ classDiagram
         +mileageChanges: MileageChange[]
     }
 
+    class EntityIS {
+        <<abstract>>
+        +networkLocation[]: LocationNetwork
+        +gmlLocation[]: GmlLocation
+    }
+
     class FunctionalInfrastructureEntity {
         <<abstract>>
         +id: ID
         +name[]: Name
         +designator[]: Designator
         +elementState[]: ElementState
-        +networkLocation[]: LocationNetwork
-        +gmlLocation[]: GmlLocation
     }
 
     class TrackNode {
@@ -272,6 +276,8 @@ classDiagram
     Topology *-- NetElement
     Topology *-- NetRelation
     NetRelation --> NetElement : elementA / elementB
+
+    EntityIS <|-- FunctionalInfrastructureEntity
 
     FunctionalInfrastructureEntity <|-- Track
     FunctionalInfrastructureEntity <|-- TrackNode

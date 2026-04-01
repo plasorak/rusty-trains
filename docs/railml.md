@@ -90,6 +90,8 @@ RailML's XSD requires lowercase `"true"` / `"false"` for boolean attributes. Pyt
 
 ## XSD Validation
 
+The schema is bundled in the repository at `railml/railML-3.3-SR1/` — no separate download is required. The path below is relative to the repo root.
+
 ```python
 import xmlschema
 from pathlib import Path

@@ -361,9 +361,9 @@ The operational consist — an ordered list of vehicles. This is the primary uni
 
 Aggregated traction for the formation. Contains a `tractionMode` child.
 
-### `trainTractionMode`
+### `tractionMode` (class name: `TrainTractionMode`)
 
-Same attributes as vehicle `powerMode`.
+The XML element is `tractionMode`; the Python/class name is `TrainTractionMode`. Same attributes as vehicle `powerMode`.
 
 | Attribute | Description |
 |---|---|
@@ -379,9 +379,13 @@ Same attributes as vehicle `powerMode`.
 | `maxAcceleration` | m/s² | Maximum achievable acceleration |
 | `meanAcceleration` | m/s² | Mean acceleration over a departure manoeuvre |
 
-### `formationBrakeSystem` (`trainBrakes`)
+### `trainBrakes`
 
-Formation-level brake system — same attributes as vehicle `vehicleBrakes`.
+Formation-level brake system (class name: `FormationBrakeSystem`). The key attribute for the physics engine is `meanDeceleration`:
+
+```
+F_braking = meanDeceleration × formation_mass_kg
+```
 
 | Attribute | Unit | Description |
 |---|---|---|
@@ -390,14 +394,6 @@ Formation-level brake system — same attributes as vehicle `vehicleBrakes`.
 | `maxDeceleration` | m/s² | Maximum instantaneous deceleration |
 | `regularBrakePercentage` | % | Brake percentage for normal operations |
 | `emergencyBrakePercentage` | % | Brake percentage for emergency braking |
-
-### `trainBrakes`
-
-Formation-level brake system — same attributes as vehicle `vehicleBrakes`. The key attribute for the physics engine is `meanDeceleration`:
-
-```
-F_braking = meanDeceleration × formation_mass_kg
-```
 
 ```xml
 <rail3:trainBrakes meanDeceleration="0.9" />
