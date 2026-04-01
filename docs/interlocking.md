@@ -4,9 +4,7 @@ This document covers the RailML 3.3 `interlocking` sub-schema — routes, signal
 
 ---
 
-## UK / British Rail Applicability
-
-The short answer: **RailML covers British signalling well**. The key mapping between UK terminology and RailML is:
+## UK / British Rail Terminology Mapping
 
 | UK term | RailML equivalent | Where |
 |---|---|---|
@@ -24,33 +22,13 @@ The short answer: **RailML covers British signalling well**. The key mapping bet
 | TIPLOC | `Designator` with `register="TPLC"` | any |
 | STANOX (TOPS) | `Designator` with `register="STNX"` | any |
 
-### Berths and TD stepping
-
-In British signalling, a **berth** is a track section monitored by a track circuit. When a train occupies a berth, its headcode (e.g. `1A23`) appears on the signaller's panel and steps forward from berth to berth as the train moves.
-
-In RailML this is `TvdSection` + `TrainNumberField`:
-
-- Each `TvdSection` can have one or more `hasTrainNumberField` children pointing to a `TrainNumberField` element — that is the berth label on the panel.
-- `isBerthingTrack="true"` disables the ordered two/three-phase release check for sections where trains reverse (e.g. platform roads, sidings), matching UK berthing track behaviour exactly.
-- The schema explicitly mentions "two/three phase release" in the `isBerthingTrack` annotation, confirming British practice is in scope.
-
-### Berthing track annotation (from the XSD)
+The `isBerthingTrack` attribute (XSD annotation):
 
 > *"True, if this section is part of a berthing track, i.e. track where trains may halt and change direction. Typically, an Interlocking assures that trains progress from section to section in an ordered sequence (aka. two/three phase release). This check would fail when a train changes direction. If this attribute is true, the interlocking doesn't carry out this check for this section."*
 
-### Path-dependent (route) signalling
+`junctionIndicator` and `distantJunctionIndicator` are built-in aspect enumeration values, covering path-dependent signalling where a signal shows a different aspect per set route.
 
-The schema explicitly names UK signalling as an example of path-dependent signalling:
-
-> *"The junction signal is used at railway junctions, i.e. where route starts towards different railway lines. It shows a different aspect for each set route path depending on the targeted railway line. It is used in path dependent signalling systems like in UK."*
-
-`junctionIndicator` and `distantJunctionIndicator` aspect types are built-in enumeration values.
-
-### What is not in RailML
-
-- No native concept of a **headcode format** or **reporting number** (the 4-character `1A23` code itself) — that lives in the timetable sub-schema as a train identifier.
-- **TRUST** (Train Running Support System) and real-time TD feed messages are operational/comms protocols, not a static infrastructure schema concern — RailML does not model them.
-- **AWS** and **TPWS** are not enumerated explicitly but can be added via the extensible train-protection code lists.
+Not in scope: the headcode string format itself (lives in the timetable sub-schema), real-time TD feed protocols (TRUST), and AWS/TPWS (not enumerated but the train-protection code lists are extensible).
 
 ---
 
