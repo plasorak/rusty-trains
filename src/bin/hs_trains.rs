@@ -1,7 +1,7 @@
 use clap::Parser;
 use hs_trains::core::model::{DriverInput, Environment, Position, SimulatedState, TrainDescription};
 use hs_trains::core::physics::{AdvanceTarget, advance_train};
-use hs_trains::core::timing::TimingTrace;
+use hs_trains::io::timing::TimingTrace;
 use hs_trains::{core::scheduler, io::railml_rollingstock};
 use indicatif::{ProgressBar, ProgressStyle};
 use polars::prelude::*;

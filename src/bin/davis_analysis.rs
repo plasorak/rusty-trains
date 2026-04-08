@@ -30,7 +30,7 @@ use clap::Parser;
 use hs_trains::core::model::{DriverInput, Environment, Position, SimulatedState};
 use hs_trains::core::physics::{AdvanceTarget, advance_train};
 use hs_trains::io::railml_rollingstock;
-use hs_trains::core::timing::TimingTrace;
+use hs_trains::io::timing::TimingTrace;
 use polars::prelude::*;
 use std::path::PathBuf;
 
