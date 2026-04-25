@@ -17,6 +17,7 @@ make-gtcl-railml = "hs_trains.make_gtcl_railml:main"
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
+    "pytest-cov",
     "pandas",
     "ipykernel",
 ]
