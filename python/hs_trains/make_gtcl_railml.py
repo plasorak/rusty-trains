@@ -58,7 +58,7 @@ from hs_trains.model.infrastructure import (
     Track,
     Length,
 )
-from hs_trains.model.rollingstock import Designator, Name
+from hs_trains.model.common import Designator, Name
 
 GPKG = Path(__file__).parents[2] / "assets" / "NWR_GTCL20260309.gpkg"
 

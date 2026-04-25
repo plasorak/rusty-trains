@@ -14,7 +14,7 @@ from typing import Literal, Optional
 
 from pydantic_xml import BaseXmlModel, RootXmlModel, attr, element
 
-from hs_trains.model.rollingstock import (
+from hs_trains.model.common import (
     NS,
     _NS,
     _NSMAP,
