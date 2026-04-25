@@ -26,3 +26,23 @@ jobs:
         with:
           name: coverage-report
           path: target/llvm-cov/html/
+
+  python-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --group dev
+      - run: uv run pytest
+
+  python-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --group dev
+      - run: uv run pytest --cov=hs_trains --cov-report=html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-coverage-report
+          path: htmlcov/
