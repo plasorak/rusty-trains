@@ -5,7 +5,7 @@ These functions are used by both ``make_gtcl_railml`` (full-network export) and
 """
 
 import uuid
-from collections import defaultdict
+from collections import defaultdict, deque
 from decimal import Decimal
 from itertools import combinations
 from pathlib import Path
@@ -165,6 +165,140 @@ def build_tracks(
     return tracks
 
 
+def build_ecm1_adjacency(
+    lines_bng: gpd.GeoDataFrame,
+) -> dict[tuple[int, int], list[str]]:
+    """Build endpoint-coordinate → [ASSETID, …] adjacency for all ECM1 segments.
+
+    Returns the endpoint map used by :func:`find_ecm1_route` and for node
+    classification (degree = number of segments sharing a coordinate).
+    """
+    endpoint_map: dict[tuple[int, int], list[str]] = defaultdict(list)
+    for _, row in lines_bng.iterrows():
+        seg_id = str(row["ASSETID"])
+        coords = list(row.geometry.coords)
+        endpoint_map[round_bng(*coords[0])].append(seg_id)
+        endpoint_map[round_bng(*coords[-1])].append(seg_id)
+    return endpoint_map
+
+
+def find_ecm1_route(
+    lines_bng: gpd.GeoDataFrame,
+    endpoint_map: dict[tuple[int, int], list[str]],
+) -> list[str]:
+    """Find a south-to-north route through ECM1 that passes through at least one
+    Y-junction and one diamond crossing.
+
+    Strategy:
+    1. Build the full segment adjacency graph from shared endpoints.
+    2. BFS from south open-end and from north open-end to get distance/parent maps.
+    3. For each degree-4 (diamond crossing) coordinate, find the pair of segments
+       (s_in from the south side, s_out toward the north side) that minimises total
+       hops.  Reconstruct the two half-paths and join them at the crossing.
+    4. Fall back to simple south-to-north BFS if no crossing is reachable.
+
+    Returns an ordered list of ASSETID strings.
+    """
+    adj: dict[str, list[str]] = defaultdict(list)
+    for segs in endpoint_map.values():
+        for s1, s2 in combinations(segs, 2):
+            adj[s1].append(s2)
+            adj[s2].append(s1)
+
+    # Degree-1 nodes are open ends; sort by BNG northing (south first).
+    deg1 = sorted(
+        [(coord, segs[0]) for coord, segs in endpoint_map.items() if len(segs) == 1],
+        key=lambda x: x[0][1],
+    )
+    if len(deg1) < 2:
+        raise SystemExit("ECM1 graph has fewer than 2 open ends — cannot find a route")
+
+    start_seg = deg1[0][1]
+    goal_seg = deg1[-1][1]
+
+    def _bfs(start: str) -> tuple[dict[str, str | None], dict[str, int]]:
+        parent: dict[str, str | None] = {start: None}
+        dist: dict[str, int] = {start: 0}
+        q: deque[str] = deque([start])
+        while q:
+            cur = q.popleft()
+            for nxt in adj[cur]:
+                if nxt not in parent:
+                    parent[nxt] = cur
+                    dist[nxt] = dist[cur] + 1
+                    q.append(nxt)
+        return parent, dist
+
+    def _reconstruct(goal: str, parent: dict[str, str | None]) -> list[str]:
+        path: list[str] = []
+        cur: str | None = goal
+        while cur is not None:
+            path.append(cur)
+            cur = parent.get(cur)
+        path.reverse()
+        return path
+
+    parent_s, dist_s = _bfs(start_seg)
+    parent_n, dist_n = _bfs(goal_seg)
+
+    # Find the diamond crossing that adds fewest extra hops.
+    best: tuple[int, str, str] | None = None  # (total_hops, s_in, s_out)
+    for coord, segs in endpoint_map.items():
+        if len(segs) != 4:
+            continue
+        for s_in in segs:
+            if s_in not in dist_s:
+                continue
+            for s_out in segs:
+                if s_out == s_in or s_out not in dist_n:
+                    continue
+                total = dist_s[s_in] + 1 + dist_n[s_out]
+                if best is None or total < best[0]:
+                    best = (total, s_in, s_out)
+
+    if best is not None:
+        _, s_in, s_out = best
+        south_half = _reconstruct(s_in, parent_s)
+        north_half = _reconstruct(s_out, parent_n)
+        north_half.reverse()
+        route = south_half + north_half
+    else:
+        print("  NOTE: no diamond crossing reachable from both ends; using direct path")
+        if goal_seg not in parent_s:
+            raise SystemExit("BFS could not connect south to north of ECM1")
+        route = _reconstruct(goal_seg, parent_s)
+
+    # Deduplicate while preserving order (half-paths may share a prefix).
+    seen: set[str] = set()
+    unique: list[str] = []
+    for seg in route:
+        if seg not in seen:
+            seen.add(seg)
+            unique.append(seg)
+
+    # Build coord lookup for reporting.
+    assetid_coords: dict[str, list[tuple[int, int]]] = {}
+    for _, row in lines_bng.iterrows():
+        coords = list(row.geometry.coords)
+        assetid_coords[str(row["ASSETID"])] = [round_bng(*coords[0]), round_bng(*coords[-1])]
+    route_coords: set[tuple[int, int]] = set()
+    for assetid in unique:
+        for c in assetid_coords.get(assetid, []):
+            route_coords.add(c)
+
+    junction_count = sum(1 for c in route_coords if len(endpoint_map.get(c, [])) == 3)
+    crossing_count = sum(1 for c in route_coords if len(endpoint_map.get(c, [])) == 4)
+    print(f"  Route segments   : {len(unique)}")
+    print(f"  Y-junctions      : {junction_count}")
+    print(f"  Diamond crossings: {crossing_count}")
+    if junction_count == 0:
+        print("  WARNING: no Y-junction found on this path")
+    if crossing_count == 0:
+        print("  WARNING: no diamond crossing found on this path")
+
+    return unique
+
+
 def build_functional_nodes(
     nodes_bng: gpd.GeoDataFrame,
     nodes_wgs84: gpd.GeoDataFrame,
@@ -181,7 +315,15 @@ def build_functional_nodes(
       4   → crossingIS   (diamond crossing — two lines cross at grade)
       ≥5  → switchIS     (complex junction, treated as switch)
       2   → through-node; no functional element generated
+
+    Precondition: ``nodes_bng`` and ``nodes_wgs84`` must have identical length
+    and row ordering — both should be filtered and ``reset_index``'d consistently
+    before calling this function.
     """
+    assert len(nodes_bng) == len(nodes_wgs84), (
+        "nodes_bng and nodes_wgs84 must have identical length and ordering; "
+        "ensure both are filtered and reset_index'd consistently"
+    )
     switches: list[SwitchIS] = []
     buffer_stops: list[BufferStop] = []
     borders: list[Border] = []

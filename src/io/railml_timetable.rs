@@ -47,7 +47,7 @@ fn parse_routes_xml(
     let tt_node = match doc.descendants().find(|n| n.has_tag_name((NS, "timetable"))) {
         Some(n) => n,
         None => {
-            eprintln!("No <timetable> element in '{label}' — no routes loaded");
+            println!("No <timetable> element in '{label}' — no routes loaded");
             return Ok(HashMap::new());
         }
     };
@@ -60,9 +60,12 @@ fn parse_routes_xml(
     // The last point has no followupSections (no onward section).
     // -----------------------------------------------------------------------
 
-    // bip_id → sequence_number (for range slicing later)
-    let mut bip_seq: HashMap<String, u32> = HashMap::new();
-    // base_itinerary_id → (bip_id, seq, Vec<(seq, track_id)>)
+    // base_itinerary_id → Vec<(seq, bip_id, Vec<(seq, track_id)>)>
+    //
+    // BIP sequence numbers are stored per base itinerary here so that range
+    // slicing (start/end BIP) is always resolved within the correct base
+    // itinerary.  A flat global map would silently produce wrong results if
+    // two base itineraries happened to share a BIP id.
     let mut base_itineraries: HashMap<String, Vec<(u32, String, Vec<(u32, String)>)>> =
         HashMap::new();
 
@@ -83,8 +86,6 @@ fn parse_routes_xml(
                 .attribute("sequenceNumber")
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(0);
-
-            bip_seq.insert(bip_id.clone(), seq);
 
             // Collect tracks from the best-priority followupSection.
             // Priority 0 (or absent) = highest priority; pick lowest numeric value.
@@ -237,9 +238,14 @@ fn parse_routes_xml(
             };
 
             // Determine the BIP sequence-number window.
+            // Look up seq within this specific base itinerary so that two base
+            // itineraries sharing a BIP id cannot interfere with each other.
+            let lookup_seq = |bip_id: &str| -> Option<u32> {
+                bi_points.iter().find(|(_, id, _)| id == bip_id).map(|(seq, _, _)| *seq)
+            };
             let start_seq = match &range.start_bip {
                 None => 0,
-                Some(id) => match bip_seq.get(id.as_str()).copied() {
+                Some(id) => match lookup_seq(id) {
                     Some(s) => s,
                     None => {
                         eprintln!(
@@ -251,7 +257,7 @@ fn parse_routes_xml(
             };
             let end_seq = match &range.end_bip {
                 None => u32::MAX,
-                Some(id) => match bip_seq.get(id.as_str()).copied() {
+                Some(id) => match lookup_seq(id) {
                     Some(s) => s,
                     None => {
                         eprintln!(
@@ -316,7 +322,7 @@ fn parse_routes_xml(
         }
 
         let route = Route::new(elements);
-        eprintln!(
+        println!(
             "Route for train '{ot_id}': {} elements, total {:.0} m",
             route.elements.len(),
             route.total_length_m,

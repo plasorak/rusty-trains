@@ -219,78 +219,101 @@ fn main() {
 /// - `element_offset_m`  — distance from the start of the current track element
 ///                         in metres
 
-fn build_batch<'a>(
-    train_id_data: &[&'a str],
-    event_kind_data: &[&'a str],
-    time_s_data: &[f64],
-    position_m_data: &[Option<f64>],
-    speed_kmh_data: &[Option<f64>],
-    accel_mss_data: &[Option<f64>],
-    track_id_data: &[Option<String>],
-    element_offset_m_data: &[Option<f64>],
-) -> DataFrame {
-    let n = time_s_data.len();
-    // Polars needs &[Option<&str>] for nullable string series.
-    let track_id_refs: Vec<Option<&str>> =
-        track_id_data.iter().map(|o| o.as_deref()).collect();
-    DataFrame::new(
-        n,
-        vec![
-            Series::new("train_id".into(), train_id_data).into(),
-            Series::new("event_kind".into(), event_kind_data).into(),
-            Series::new("time_s".into(), time_s_data).into(),
-            Series::new("position_m".into(), position_m_data).into(),
-            Series::new("speed_kmh".into(), speed_kmh_data).into(),
-            Series::new("acceleration_mss".into(), accel_mss_data).into(),
-            Series::new("track_id".into(), track_id_refs.as_slice()).into(),
-            Series::new("element_offset_m".into(), element_offset_m_data).into(),
-        ],
-    )
-    .unwrap()
+/// Accumulates all output columns for a batch of rows before writing to Parquet.
+struct BatchBuffers<'a> {
+    train_id: Vec<&'a str>,
+    event_kind: Vec<&'static str>,
+    time_s: Vec<f64>,
+    position_m: Vec<Option<f64>>,
+    speed_kmh: Vec<Option<f64>>,
+    accel_mss: Vec<Option<f64>>,
+    track_id: Vec<Option<String>>,
+    element_offset_m: Vec<Option<f64>>,
+}
+
+impl<'a> BatchBuffers<'a> {
+    fn with_capacity(cap: usize) -> Self {
+        BatchBuffers {
+            train_id: Vec::with_capacity(cap),
+            event_kind: Vec::with_capacity(cap),
+            time_s: Vec::with_capacity(cap),
+            position_m: Vec::with_capacity(cap),
+            speed_kmh: Vec::with_capacity(cap),
+            accel_mss: Vec::with_capacity(cap),
+            track_id: Vec::with_capacity(cap),
+            element_offset_m: Vec::with_capacity(cap),
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.time_s.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.time_s.is_empty()
+    }
+
+    fn push(&mut self, train_id: &'a str, event_kind: &'static str, t: f64, row: StepRow) {
+        self.train_id.push(train_id);
+        self.event_kind.push(event_kind);
+        self.time_s.push(t);
+        self.position_m.push(row.position_m);
+        self.speed_kmh.push(row.speed_kmh);
+        self.accel_mss.push(row.accel_mss);
+        self.track_id.push(row.track_id);
+        self.element_offset_m.push(row.element_offset_m);
+    }
+
+    fn clear(&mut self) {
+        self.train_id.clear();
+        self.event_kind.clear();
+        self.time_s.clear();
+        self.position_m.clear();
+        self.speed_kmh.clear();
+        self.accel_mss.clear();
+        self.track_id.clear();
+        self.element_offset_m.clear();
+    }
+
+    fn build_dataframe(&self) -> DataFrame {
+        // Polars needs &[Option<&str>] for nullable string series.
+        let track_id_refs: Vec<Option<&str>> =
+            self.track_id.iter().map(|o| o.as_deref()).collect();
+        DataFrame::new(
+            self.time_s.len(),
+            vec![
+                Series::new("train_id".into(), self.train_id.as_slice()).into(),
+                Series::new("event_kind".into(), self.event_kind.as_slice()).into(),
+                Series::new("time_s".into(), self.time_s.as_slice()).into(),
+                Series::new("position_m".into(), self.position_m.as_slice()).into(),
+                Series::new("speed_kmh".into(), self.speed_kmh.as_slice()).into(),
+                Series::new("acceleration_mss".into(), self.accel_mss.as_slice()).into(),
+                Series::new("track_id".into(), track_id_refs.as_slice()).into(),
+                Series::new("element_offset_m".into(), self.element_offset_m.as_slice()).into(),
+            ],
+        )
+        .unwrap()
+    }
 }
 
 /// Write buffered rows to the Parquet file and clear the buffers.
 /// Extracted to avoid duplicating the flush logic between the mid-loop check and the final flush.
-#[allow(clippy::too_many_arguments)]
 fn flush_batch<W: std::io::Write>(
     writer: &mut polars::io::parquet::write::BatchedWriter<W>,
-    train_id_data: &mut Vec<&str>,
-    event_kind_data: &mut Vec<&'static str>,
-    time_s_data: &mut Vec<f64>,
-    position_m_data: &mut Vec<Option<f64>>,
-    speed_kmh_data: &mut Vec<Option<f64>>,
-    accel_mss_data: &mut Vec<Option<f64>>,
-    track_id_data: &mut Vec<Option<String>>,
-    element_offset_m_data: &mut Vec<Option<f64>>,
+    buf: &mut BatchBuffers<'_>,
     total_rows: &mut usize,
     pb: &ProgressBar,
     label: &str,
 ) {
-    let n = time_s_data.len();
-    let batch = build_batch(
-        train_id_data,
-        event_kind_data,
-        time_s_data,
-        position_m_data,
-        speed_kmh_data,
-        accel_mss_data,
-        track_id_data,
-        element_offset_m_data,
-    );
+    let n = buf.len();
+    let batch = buf.build_dataframe();
     writer.write_batch(&batch).unwrap_or_else(|e| {
         eprintln!("Write error ({label}): {e}");
         std::process::exit(1)
     });
     *total_rows += n;
     pb.println(format!("  flushed {n} rows (total: {total_rows})"));
-    train_id_data.clear();
-    event_kind_data.clear();
-    time_s_data.clear();
-    position_m_data.clear();
-    speed_kmh_data.clear();
-    accel_mss_data.clear();
-    track_id_data.clear();
-    element_offset_m_data.clear();
+    buf.clear();
 }
 
 /// Output columns produced for one train at one time step.
@@ -360,14 +383,7 @@ fn run_simulation(
     // Pre-cache IDs as &str slices — avoids per-step String allocations in the hot loop.
     let train_id_cache: Vec<&str> = trains.iter().map(|c| c.id.as_str()).collect();
 
-    let mut train_id_data = Vec::<&str>::with_capacity(buf_cap);
-    let mut event_kind_data = Vec::<&'static str>::with_capacity(buf_cap);
-    let mut time_s_data = Vec::<f64>::with_capacity(buf_cap);
-    let mut position_m_data = Vec::<Option<f64>>::with_capacity(buf_cap);
-    let mut speed_kmh_data = Vec::<Option<f64>>::with_capacity(buf_cap);
-    let mut accel_mss_data = Vec::<Option<f64>>::with_capacity(buf_cap);
-    let mut track_id_data = Vec::<Option<String>>::with_capacity(buf_cap);
-    let mut element_offset_m_data = Vec::<Option<f64>>::with_capacity(buf_cap);
+    let mut buf = BatchBuffers::with_capacity(buf_cap);
 
     // Fixed output schema — must match the Series built at flush time.
     let schema = Schema::from_iter([
@@ -508,14 +524,7 @@ fn run_simulation(
                 last_times.iter_mut().for_each(|lt| *lt = t);
 
                 for (i, row) in step_results.into_iter().enumerate() {
-                    train_id_data.push(train_id_cache[i]);
-                    event_kind_data.push("physics_tick");
-                    time_s_data.push(t);
-                    position_m_data.push(row.position_m);
-                    speed_kmh_data.push(row.speed_kmh);
-                    accel_mss_data.push(row.accel_mss);
-                    track_id_data.push(row.track_id);
-                    element_offset_m_data.push(row.element_offset_m);
+                    buf.push(train_id_cache[i], "physics_tick", t, row);
                 }
 
                 pb.inc(1);
@@ -539,14 +548,7 @@ fn run_simulation(
                             advance_with_route(s, cfg, dt_i);
                             let row = make_step_row(cfg, s, t);
                             last_times[i] = t;
-                            train_id_data.push(train_id_cache[i]);
-                            event_kind_data.push(kind_str);
-                            time_s_data.push(t);
-                            position_m_data.push(row.position_m);
-                            speed_kmh_data.push(row.speed_kmh);
-                            accel_mss_data.push(row.accel_mss);
-                            track_id_data.push(row.track_id);
-                            element_offset_m_data.push(row.element_offset_m);
+                            buf.push(train_id_cache[i], kind_str, t, row);
                         }
                     }
                 }
@@ -554,40 +556,14 @@ fn run_simulation(
             }
         }
 
-        if time_s_data.len() >= flush_rows {
-            flush_batch(
-                &mut writer,
-                &mut train_id_data,
-                &mut event_kind_data,
-                &mut time_s_data,
-                &mut position_m_data,
-                &mut speed_kmh_data,
-                &mut accel_mss_data,
-                &mut track_id_data,
-                &mut element_offset_m_data,
-                &mut total_rows,
-                &pb,
-                "mid-loop",
-            );
+        if buf.len() >= flush_rows {
+            flush_batch(&mut writer, &mut buf, &mut total_rows, &pb, "mid-loop");
         }
     }
 
     // Final flush: covers both normal queue exhaustion and the time-limit break.
-    if !time_s_data.is_empty() {
-        flush_batch(
-            &mut writer,
-            &mut train_id_data,
-            &mut event_kind_data,
-            &mut time_s_data,
-            &mut position_m_data,
-            &mut speed_kmh_data,
-            &mut accel_mss_data,
-            &mut track_id_data,
-            &mut element_offset_m_data,
-            &mut total_rows,
-            &pb,
-            "final flush",
-        );
+    if !buf.is_empty() {
+        flush_batch(&mut writer, &mut buf, &mut total_rows, &pb, "final flush");
     }
 
     pb.finish_and_clear();
@@ -723,25 +699,27 @@ simulation:
         assert_eq!(config.simulation.flush_rows, 500);
     }
 
-    // --- build_batch ---------------------------------------------------------
+    // --- BatchBuffers / build_dataframe --------------------------------------
+
+    fn push_row(buf: &mut BatchBuffers<'_>, train_id: &'static str, pos: Option<f64>, track: Option<&str>) {
+        buf.push(train_id, "physics_tick", 1.0, StepRow {
+            position_m: pos,
+            speed_kmh: None,
+            accel_mss: None,
+            track_id: track.map(str::to_string),
+            element_offset_m: track.map(|_| 0.0),
+        });
+    }
 
     #[test]
-    fn test_build_batch_column_names_and_count() {
-        let df = build_batch(
-            &["t1"],
-            &["physics_tick"],
-            &[1.0],
-            &[Some(100.0)],
-            &[Some(50.0)],
-            &[Some(0.5)],
-            &[Some("track_A".to_string())],
-            &[Some(25.0)],
-        );
+    fn test_batch_buffers_column_names_and_count() {
+        let mut buf = BatchBuffers::with_capacity(4);
+        push_row(&mut buf, "t1", Some(100.0), Some("track_A"));
+        let df = buf.build_dataframe();
 
         assert_eq!(df.height(), 1);
         assert_eq!(df.width(), 8);
 
-        // get_column_names() returns Vec<&PlSmallStr>; compare via as_str().
         let names: Vec<&str> = df.get_column_names().into_iter().map(|s| s.as_str()).collect();
         assert!(names.contains(&"train_id"));
         assert!(names.contains(&"event_kind"));
@@ -754,24 +732,17 @@ simulation:
     }
 
     #[test]
-    fn test_build_batch_nullable_columns() {
-        // Row 0: routed train — track_id and element_offset_m are populated.
-        // Row 1: unrouted train — both are null.
-        let df = build_batch(
-            &["routed", "free"],
-            &["physics_tick", "physics_tick"],
-            &[1.0, 1.0],
-            &[Some(500.0), Some(200.0)],
-            &[Some(30.0), Some(80.0)],
-            &[Some(0.1), Some(0.2)],
-            &[Some("track_X".to_string()), None],
-            &[Some(50.0), None],
-        );
+    fn test_batch_buffers_nullable_columns() {
+        // Row 0: routed train — track_id populated.
+        // Row 1: no track — both null.
+        let mut buf = BatchBuffers::with_capacity(4);
+        push_row(&mut buf, "routed", Some(500.0), Some("track_X"));
+        push_row(&mut buf, "free", Some(200.0), None);
+        let df = buf.build_dataframe();
 
-        // is_null() returns BooleanChunked; use .get(row) to check individual rows.
         let track_null = df.column("track_id").unwrap().is_null();
-        assert_eq!(track_null.get(0), Some(false)); // routed row has a value
-        assert_eq!(track_null.get(1), Some(true));  // free runner is null
+        assert_eq!(track_null.get(0), Some(false));
+        assert_eq!(track_null.get(1), Some(true));
 
         let offset_null = df.column("element_offset_m").unwrap().is_null();
         assert_eq!(offset_null.get(0), Some(false));
@@ -779,28 +750,103 @@ simulation:
     }
 
     #[test]
-    fn test_build_batch_multiple_rows() {
-        let n = 5_usize;
-        let train_ids: Vec<&str> = vec!["t"; n];
-        let event_kinds: Vec<&str> = vec!["physics_tick"; n];
-        let times: Vec<f64> = (0..n).map(|i| i as f64).collect();
-        let positions: Vec<Option<f64>> = (0..n).map(|i| Some(i as f64 * 10.0)).collect();
-        let speeds: Vec<Option<f64>> = vec![None; n];
-        let accels: Vec<Option<f64>> = vec![None; n];
-        let track_ids: Vec<Option<String>> = vec![None; n];
-        let offsets: Vec<Option<f64>> = vec![None; n];
+    fn test_batch_buffers_multiple_rows_and_clear() {
+        let mut buf = BatchBuffers::with_capacity(8);
+        for i in 0..5 {
+            buf.push("t", "physics_tick", i as f64, StepRow {
+                position_m: Some(i as f64 * 10.0),
+                speed_kmh: None,
+                accel_mss: None,
+                track_id: None,
+                element_offset_m: None,
+            });
+        }
+        assert_eq!(buf.len(), 5);
+        assert_eq!(buf.build_dataframe().height(), 5);
 
-        let df = build_batch(
-            &train_ids,
-            &event_kinds,
-            &times,
-            &positions,
-            &speeds,
-            &accels,
-            &track_ids,
-            &offsets,
-        );
+        buf.clear();
+        assert_eq!(buf.len(), 0);
+        assert!(buf.is_empty());
+    }
 
-        assert_eq!(df.height(), n);
+    // --- advance_with_route --------------------------------------------------
+
+    fn make_minimal_train() -> TrainDescription {
+        TrainDescription {
+            power: 2_000_000.0,
+            traction_force_at_standstill: 300_000.0,
+            max_speed: 200.0,
+            mass: 100_000.0,
+            davis_a: 1_500.0,
+            davis_b: 0.0,
+            drag_coeff: 0.0,
+            braking_force: 500_000.0,
+        }
+    }
+
+    fn make_route_cfg(length_m: f64) -> TrainConfig {
+        use hs_trains::core::model::{NetElement, RouteElement, Track};
+        let elements = vec![RouteElement {
+            track_id: "track_0".to_string(),
+            net_element_id: "ne_0".to_string(),
+            length_m,
+        }];
+        TrainConfig {
+            id: "test".to_string(),
+            train: make_minimal_train(),
+            environment: Environment { gradient: 0.0, wind_speed: 0.0 },
+            driver: DriverInput { power_ratio: 1.0, brake_ratio: 0.0 },
+            timing: None,
+            route: Route::new(elements),
+        }
+    }
+
+    fn make_state(x: f64, speed: f64) -> SimulatedState {
+        SimulatedState { position: Position { x, y: 0.0, z: 0.0 }, speed, acceleration: 0.0 }
+    }
+
+    #[test]
+    fn test_advance_with_route_already_at_end_is_noop() {
+        let cfg = make_route_cfg(100.0);
+        let mut state = make_state(100.0, 10.0); // already at route end
+        advance_with_route(&mut state, &cfg, 5.0);
+        // State must not change.
+        assert!((state.position.x - 100.0).abs() < 1e-9);
+        assert!((state.speed - 10.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_advance_with_route_clamps_and_halts_at_end() {
+        let cfg = make_route_cfg(1.0); // very short route so any tick overshoots
+        let mut state = make_state(0.0, 0.0);
+        // A large dt will push the train past 1 m.
+        advance_with_route(&mut state, &cfg, 1000.0);
+        assert!((state.position.x - 1.0).abs() < 1e-9, "position should be clamped to route end");
+        assert_eq!(state.speed, 0.0, "speed should be zeroed at route end");
+        assert_eq!(state.acceleration, 0.0, "acceleration should be zeroed at route end");
+    }
+
+    #[test]
+    fn test_advance_with_route_within_route_moves_forward() {
+        let cfg = make_route_cfg(1_000_000.0); // very long so we never reach the end
+        let mut state = make_state(0.0, 0.0);
+        advance_with_route(&mut state, &cfg, 10.0);
+        assert!(state.position.x > 0.0, "train should have moved");
+        assert!(state.position.x < 1_000_000.0, "train should not have reached route end");
+    }
+
+    // --- make_step_row -------------------------------------------------------
+
+    #[test]
+    fn test_make_step_row_physics_path_populates_speed_and_track() {
+        let cfg = make_route_cfg(1000.0);
+        let state = make_state(50.0, 20.0); // 20 m/s = 72 km/h
+        let row = make_step_row(&cfg, &state, 0.0);
+
+        assert!((row.position_m.unwrap() - 50.0).abs() < 1e-9);
+        assert!((row.speed_kmh.unwrap() - 72.0).abs() < 1e-6);
+        assert!(row.accel_mss.is_some());
+        assert_eq!(row.track_id.as_deref(), Some("track_0"));
+        assert!((row.element_offset_m.unwrap() - 50.0).abs() < 1e-9);
     }
 }

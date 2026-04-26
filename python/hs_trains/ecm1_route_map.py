@@ -13,8 +13,6 @@ Usage
     uv run ecm1-route-map --output my_map.html --no-open
 """
 
-from collections import defaultdict, deque
-from itertools import combinations
 from pathlib import Path
 
 import geopandas as gpd
@@ -22,7 +20,7 @@ import plotly.graph_objects as go
 import pyproj
 import typer
 
-from hs_trains.gtcl import GPKG, round_bng
+from hs_trains.gtcl import GPKG, build_ecm1_adjacency, find_ecm1_route, round_bng
 
 _BNG = pyproj.CRS("EPSG:27700")
 _WGS84 = pyproj.CRS("EPSG:4326")
@@ -33,94 +31,6 @@ def _bng_to_wgs84(x: int, y: int) -> tuple[float, float]:
     """Convert a rounded BNG coordinate to (lon, lat)."""
     lon, lat = _TRANSFORMER.transform(x, y)
     return lon, lat
-
-
-def _build_adjacency(
-    lines_bng: gpd.GeoDataFrame,
-) -> dict[tuple[int, int], list[str]]:
-    """endpoint coordinate → list of ASSETID strings that touch it."""
-    endpoint_map: dict[tuple[int, int], list[str]] = defaultdict(list)
-    for _, row in lines_bng.iterrows():
-        seg_id = str(row["ASSETID"])
-        coords = list(row.geometry.coords)
-        endpoint_map[round_bng(*coords[0])].append(seg_id)
-        endpoint_map[round_bng(*coords[-1])].append(seg_id)
-    return endpoint_map
-
-
-def _find_route(
-    lines_bng: gpd.GeoDataFrame,
-    endpoint_map: dict[tuple[int, int], list[str]],
-) -> list[str]:
-    """Same bi-directional BFS as make_ecm1_railml, returning ordered ASSETID list."""
-    adj: dict[str, list[str]] = defaultdict(list)
-    for segs in endpoint_map.values():
-        for s1, s2 in combinations(segs, 2):
-            adj[s1].append(s2)
-            adj[s2].append(s1)
-
-    deg1 = sorted(
-        [(coord, segs[0]) for coord, segs in endpoint_map.items() if len(segs) == 1],
-        key=lambda x: x[0][1],
-    )
-    start_seg = deg1[0][1]
-    goal_seg = deg1[-1][1]
-
-    def _bfs(start: str) -> tuple[dict[str, str | None], dict[str, int]]:
-        parent: dict[str, str | None] = {start: None}
-        dist: dict[str, int] = {start: 0}
-        q: deque[str] = deque([start])
-        while q:
-            cur = q.popleft()
-            for nxt in adj[cur]:
-                if nxt not in parent:
-                    parent[nxt] = cur
-                    dist[nxt] = dist[cur] + 1
-                    q.append(nxt)
-        return parent, dist
-
-    def _reconstruct(goal: str, parent: dict[str, str | None]) -> list[str]:
-        path: list[str] = []
-        cur: str | None = goal
-        while cur is not None:
-            path.append(cur)
-            cur = parent.get(cur)
-        path.reverse()
-        return path
-
-    parent_s, dist_s = _bfs(start_seg)
-    parent_n, dist_n = _bfs(goal_seg)
-
-    best: tuple[int, str, str] | None = None
-    for coord, segs in endpoint_map.items():
-        if len(segs) != 4:
-            continue
-        for s_in in segs:
-            if s_in not in dist_s:
-                continue
-            for s_out in segs:
-                if s_out == s_in or s_out not in dist_n:
-                    continue
-                total = dist_s[s_in] + 1 + dist_n[s_out]
-                if best is None or total < best[0]:
-                    best = (total, s_in, s_out)
-
-    if best is not None:
-        _, s_in, s_out = best
-        south_half = _reconstruct(s_in, parent_s)
-        north_half = _reconstruct(s_out, parent_n)
-        north_half.reverse()
-        route = south_half + north_half
-    else:
-        route = _reconstruct(goal_seg, parent_s)
-
-    seen: set[str] = set()
-    unique: list[str] = []
-    for seg in route:
-        if seg not in seen:
-            seen.add(seg)
-            unique.append(seg)
-    return unique
 
 
 def _lines_trace(
@@ -256,8 +166,8 @@ def main(
     lines_wgs84 = lines_bng.to_crs("EPSG:4326")
 
     typer.echo("Finding route …")
-    endpoint_map = _build_adjacency(lines_bng)
-    route = _find_route(lines_bng, endpoint_map)
+    endpoint_map = build_ecm1_adjacency(lines_bng)
+    route = find_ecm1_route(lines_bng, endpoint_map)
     route_set = set(route)
 
     # Collect all endpoint coordinates that the route passes through.
