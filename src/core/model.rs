@@ -1,5 +1,187 @@
 #![allow(dead_code)]
 
+use std::collections::HashMap;
+
+// ---------------------------------------------------------------------------
+// Infrastructure
+// ---------------------------------------------------------------------------
+
+/// A directed track section in the RailML topology layer.
+#[derive(Debug, Clone)]
+pub struct NetElement {
+    pub id: String,
+    pub length_m: f64,
+}
+
+/// A functional track that maps 1-to-1 onto a NetElement.
+#[derive(Debug, Clone)]
+pub struct Track {
+    pub id: String,
+    pub net_element_id: String,
+}
+
+/// A named stopping/passing location on the network.
+#[derive(Debug, Clone)]
+pub struct OperationalPoint {
+    pub id: String,
+    pub name: Option<String>,
+}
+
+/// Parsed infrastructure from a RailML `<infrastructure>` section.
+#[derive(Debug, Clone)]
+pub struct Infrastructure {
+    pub net_elements: HashMap<String, NetElement>,
+    /// track id → Track (which carries the net_element_id back-link)
+    pub tracks: HashMap<String, Track>,
+    pub ops: HashMap<String, OperationalPoint>,
+}
+
+// ---------------------------------------------------------------------------
+// Route
+// ---------------------------------------------------------------------------
+
+/// One track section on a train's route, with a resolved length.
+#[derive(Debug, Clone)]
+pub struct RouteElement {
+    pub track_id: String,
+    pub net_element_id: String,
+    pub length_m: f64,
+}
+
+/// The resolved path a physics train follows through the network.
+///
+/// Position along the route is the scalar `x` used by the physics engine.
+/// `locate` maps that scalar back to a specific track and offset.
+#[derive(Debug, Clone)]
+pub struct Route {
+    pub elements: Vec<RouteElement>,
+    /// Prefix-sum of element lengths: `cumulative_lengths[i]` is the start of
+    /// `elements[i]`.  Length is `elements.len() + 1`; the first entry is 0.
+    pub cumulative_lengths: Vec<f64>,
+    pub total_length_m: f64,
+}
+
+impl Route {
+    pub fn new(elements: Vec<RouteElement>) -> Self {
+        let mut cumulative_lengths = Vec::with_capacity(elements.len() + 1);
+        cumulative_lengths.push(0.0);
+        for el in &elements {
+            let prev = *cumulative_lengths.last().unwrap();
+            cumulative_lengths.push(prev + el.length_m);
+        }
+        let total_length_m = *cumulative_lengths.last().unwrap_or(&0.0);
+        Route { elements, cumulative_lengths, total_length_m }
+    }
+
+    /// Map a scalar distance along the route to the containing track and offset.
+    ///
+    /// Returns `None` only when `elements` is empty.
+    /// Clamps to the last element's end when `distance_m >= total_length_m`.
+    pub fn locate(&self, distance_m: f64) -> Option<NetworkPosition> {
+        if self.elements.is_empty() {
+            return None;
+        }
+        let clamped = distance_m.min(self.total_length_m);
+        // partition_point returns first index where cumulative_lengths[i] > clamped.
+        // Subtract 1 to get the element whose start <= clamped.
+        let idx = self.cumulative_lengths
+            .partition_point(|&cl| cl <= clamped)
+            .saturating_sub(1)
+            .min(self.elements.len() - 1);
+        let el = &self.elements[idx];
+        let offset_m = clamped - self.cumulative_lengths[idx];
+        Some(NetworkPosition {
+            track_id: el.track_id.clone(),
+            net_element_id: el.net_element_id.clone(),
+            offset_m,
+        })
+    }
+}
+
+/// Position within a specific track element, expressed as an offset from its start.
+#[derive(Debug, Clone)]
+pub struct NetworkPosition {
+    pub track_id: String,
+    pub net_element_id: String,
+    pub offset_m: f64,
+}
+
+// ---------------------------------------------------------------------------
+// Existing types
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod route_tests {
+    use super::*;
+
+    fn make_route(lengths: &[f64]) -> Route {
+        let elements: Vec<RouteElement> = lengths
+            .iter()
+            .enumerate()
+            .map(|(i, &l)| RouteElement {
+                track_id: format!("track_{i}"),
+                net_element_id: format!("ne_{i}"),
+                length_m: l,
+            })
+            .collect();
+        Route::new(elements)
+    }
+
+    #[test]
+    fn test_locate_at_start() {
+        let r = make_route(&[100.0, 200.0, 150.0]);
+        let p = r.locate(0.0).unwrap();
+        assert_eq!(p.track_id, "track_0");
+        assert_eq!(p.offset_m, 0.0);
+    }
+
+    #[test]
+    fn test_locate_mid_first_element() {
+        let r = make_route(&[100.0, 200.0]);
+        let p = r.locate(50.0).unwrap();
+        assert_eq!(p.track_id, "track_0");
+        assert_eq!(p.offset_m, 50.0);
+    }
+
+    #[test]
+    fn test_locate_at_element_boundary() {
+        // exactly at 100 m — start of second element
+        let r = make_route(&[100.0, 200.0]);
+        let p = r.locate(100.0).unwrap();
+        assert_eq!(p.track_id, "track_1");
+        assert_eq!(p.offset_m, 0.0);
+    }
+
+    #[test]
+    fn test_locate_at_route_end() {
+        let r = make_route(&[100.0, 200.0]);
+        let p = r.locate(300.0).unwrap();
+        assert_eq!(p.track_id, "track_1");
+        assert!((p.offset_m - 200.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_locate_beyond_route_clamped() {
+        // Should clamp to route end, not return None.
+        let r = make_route(&[100.0]);
+        let p = r.locate(999.0).unwrap();
+        assert_eq!(p.track_id, "track_0");
+        assert!((p.offset_m - 100.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_locate_empty_route() {
+        let r = Route::new(vec![]);
+        assert!(r.locate(0.0).is_none());
+    }
+
+    #[test]
+    fn test_total_length() {
+        let r = make_route(&[100.0, 200.0, 50.0]);
+        assert!((r.total_length_m - 350.0).abs() < 1e-9);
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Position {
     pub x: f64,

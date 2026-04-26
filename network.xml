@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Minimal RailML 3.3 network used with config/config_infrastructure.yaml.
+
+  Line layout (left to right):
+    Station A ──[track_1, 2 km]──> Halt B ──[track_2, 2 km]──> Junction C ──[track_3, 2 km]──> Terminal D
+
+  Total route for OT_ECM1_Express: 6 000 m.
+  A Class 66 at 0.8 throttle on a 0.2 % gradient should cover this in ~600 s.
+-->
+<rail3:railml xmlns:rail3="https://www.railml.org/schemas/3.3">
+
+  <rail3:infrastructure>
+    <rail3:topology>
+      <rail3:netElements>
+        <rail3:netElement id="ne_1" length="2000.0"/>
+        <rail3:netElement id="ne_2" length="2000.0"/>
+        <rail3:netElement id="ne_3" length="2000.0"/>
+      </rail3:netElements>
+    </rail3:topology>
+
+    <rail3:functionalInfrastructure>
+      <rail3:tracks>
+        <rail3:track id="track_1" netElementRef="ne_1"/>
+        <rail3:track id="track_2" netElementRef="ne_2"/>
+        <rail3:track id="track_3" netElementRef="ne_3"/>
+      </rail3:tracks>
+
+      <rail3:operationalPoints>
+        <rail3:operationalPoint id="OP_A" name="Station A"/>
+        <rail3:operationalPoint id="OP_B" name="Halt B"/>
+        <rail3:operationalPoint id="OP_C" name="Junction C"/>
+        <rail3:operationalPoint id="OP_D" name="Terminal D"/>
+      </rail3:operationalPoints>
+    </rail3:functionalInfrastructure>
+  </rail3:infrastructure>
+
+  <rail3:timetable>
+    <rail3:baseItineraries>
+      <!--
+        BIP_A → track_1 → BIP_B → track_2 → BIP_C → track_3 → BIP_D
+        Each baseItineraryPoint's followupSections describe the track(s) to the
+        next point.  The final point (BIP_D) has no followup section.
+      -->
+      <rail3:baseItinerary id="BIT_ECM1">
+
+        <rail3:baseItineraryPoint id="BIP_A" sequenceNumber="1" locationRef="OP_A">
+          <rail3:followupSections>
+            <rail3:followupSection>
+              <rail3:trackRefs>
+                <rail3:trackRef ref="track_1" sequenceNumber="1"/>
+              </rail3:trackRefs>
+            </rail3:followupSection>
+          </rail3:followupSections>
+        </rail3:baseItineraryPoint>
+
+        <rail3:baseItineraryPoint id="BIP_B" sequenceNumber="2" locationRef="OP_B">
+          <rail3:followupSections>
+            <rail3:followupSection>
+              <rail3:trackRefs>
+                <rail3:trackRef ref="track_2" sequenceNumber="1"/>
+              </rail3:trackRefs>
+            </rail3:followupSection>
+          </rail3:followupSections>
+        </rail3:baseItineraryPoint>
+
+        <rail3:baseItineraryPoint id="BIP_C" sequenceNumber="3" locationRef="OP_C">
+          <rail3:followupSections>
+            <rail3:followupSection>
+              <rail3:trackRefs>
+                <rail3:trackRef ref="track_3" sequenceNumber="1"/>
+              </rail3:trackRefs>
+            </rail3:followupSection>
+          </rail3:followupSections>
+        </rail3:baseItineraryPoint>
+
+        <!-- Terminal — no onward section -->
+        <rail3:baseItineraryPoint id="BIP_D" sequenceNumber="4" locationRef="OP_D"/>
+
+      </rail3:baseItinerary>
+    </rail3:baseItineraries>
+
+    <rail3:itineraries>
+      <rail3:itinerary id="ITI_ECM1">
+        <rail3:range baseItineraryRef="BIT_ECM1" sequenceNumber="1"/>
+      </rail3:itinerary>
+    </rail3:itineraries>
+
+    <rail3:operationalTrains>
+      <rail3:operationalTrain id="OT_ECM1_Express">
+        <rail3:operationalTrainVariant id="OTV_ECM1" itineraryRef="ITI_ECM1" validityRef="V1"/>
+      </rail3:operationalTrain>
+      <!-- config_railml.yaml trains -->
+      <rail3:operationalTrain id="OT_Train1">
+        <rail3:operationalTrainVariant id="OTV_Train1" itineraryRef="ITI_ECM1" validityRef="V1"/>
+      </rail3:operationalTrain>
+      <rail3:operationalTrain id="OT_Train2">
+        <rail3:operationalTrainVariant id="OTV_Train2" itineraryRef="ITI_ECM1" validityRef="V1"/>
+      </rail3:operationalTrain>
+      <!-- config_mixed.yaml trains -->
+      <rail3:operationalTrain id="OT_SimulatedExpress">
+        <rail3:operationalTrainVariant id="OTV_SimExpress" itineraryRef="ITI_ECM1" validityRef="V1"/>
+      </rail3:operationalTrain>
+      <rail3:operationalTrain id="OT_1A23">
+        <rail3:operationalTrainVariant id="OTV_1A23" itineraryRef="ITI_ECM1" validityRef="V1"/>
+      </rail3:operationalTrain>
+      <rail3:operationalTrain id="OT_2B45">
+        <rail3:operationalTrainVariant id="OTV_2B45" itineraryRef="ITI_ECM1" validityRef="V1"/>
+      </rail3:operationalTrain>
+    </rail3:operationalTrains>
+  </rail3:timetable>
+
+</rail3:railml>

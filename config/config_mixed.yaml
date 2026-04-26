@@ -2,18 +2,20 @@ simulation:
   time_step_s: 0.1                      # integration step (s)
   duration_s:  3600.0                   # total simulated time (s)
 
+  infrastructure_file: network.xml
+
   trains:
-    # Physics train — rolling-stock parameters sourced from RailML.
     - id: "simulated_express"
       kind: railml
       railml_file: output.xml
       formation_id: formation_class66_mk3
+      timetable_train_id: "OT_SimulatedExpress"
       environment:
-        gradient: 0.01                      # rise/run (1 % uphill)
-        wind_speed: 0.0                     # m/s (head-wind positive)
+        gradient: 0.01
+        wind_speed: 0.0
       driver:
-        power_ratio: 0.8                    # 0–1 throttle
-        brake_ratio: 0.0                    # 0–1 braking
+        power_ratio: 0.8
+        brake_ratio: 0.0
 
     # Timing-traced trains: position interpolated from berth timing data when
     # available; physics (driver + environment below) used as fallback for any
@@ -23,8 +25,8 @@ simulation:
       kind: railml
       railml_file: output.xml
       formation_id: formation_class66_mk3
+      timetable_train_id: "OT_1A23"
       timing_file: berth_timing.parquet
-      # timing_train_id defaults to id ("1A23") — override only if they differ
       environment:
         gradient: 0.0
         wind_speed: 0.0
@@ -36,6 +38,7 @@ simulation:
       kind: railml
       railml_file: output.xml
       formation_id: formation_class66_mk3
+      timetable_train_id: "OT_2B45"
       timing_file: berth_timing.parquet
       timing_train_id: "1A23"     # this service uses the same timing data as 1A23
       environment:
