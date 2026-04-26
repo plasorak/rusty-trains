@@ -34,14 +34,23 @@ fn parse_infrastructure_xml(xml: &str, label: &str) -> Result<Infrastructure, St
     for ne in infra_node.descendants().filter(|n| n.has_tag_name((NS, "netElement"))) {
         let ctx = format!("netElement in '{label}'");
         let id: String = parse_attr(ne, "id", &ctx)?;
-        match parse_attr::<f64>(ne, "length", &ctx) {
-            Ok(length_m) => {
-                net_elements.insert(id.clone(), NetElement { id, length_m });
+        // Accept both the hand-authored shorthand (@length="x") and the pydantic-generated
+        // RailML 3.3 form (<rail3:length quantity="x"/>).
+        let length_m: f64 = if let Ok(v) = parse_attr::<f64>(ne, "length", &ctx) {
+            v
+        } else if let Some(child) = ne.children().find(|n| n.has_tag_name((NS, "length"))) {
+            match child.attribute("quantity").and_then(|v| v.parse::<f64>().ok()) {
+                Some(v) => v,
+                None => {
+                    eprintln!("Warning: netElement '{id}' has no parseable length — skipped");
+                    continue;
+                }
             }
-            Err(_) => {
-                eprintln!("Warning: netElement '{id}' has no parseable @length — skipped");
-            }
-        }
+        } else {
+            eprintln!("Warning: netElement '{id}' has no parseable length — skipped");
+            continue;
+        };
+        net_elements.insert(id.clone(), NetElement { id, length_m });
     }
 
     // --- Tracks ----------------------------------------------------------------
@@ -123,6 +132,23 @@ mod tests {
         assert_eq!(infra.ops.len(), 2);
         assert_eq!(infra.ops["OP_A"].name.as_deref(), Some("Station Alpha"));
         assert!(infra.ops["OP_B"].name.is_none());
+    }
+
+    #[test]
+    fn test_net_element_length_child_element_form() {
+        // pydantic-generated RailML uses <rail3:length quantity="x"/> rather than @length="x"
+        let doc = infra(
+            r#"<rail3:topology>
+                 <rail3:netElements>
+                   <rail3:netElement id="ne_pydantic">
+                     <rail3:length quantity="750.25"/>
+                   </rail3:netElement>
+                 </rail3:netElements>
+               </rail3:topology>"#,
+        );
+        let infra = parse_infrastructure_xml(&doc, "test").unwrap();
+        assert_eq!(infra.net_elements.len(), 1);
+        assert!((infra.net_elements["ne_pydantic"].length_m - 750.25).abs() < 1e-9);
     }
 
     #[test]

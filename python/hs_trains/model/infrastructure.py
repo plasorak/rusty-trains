@@ -217,6 +217,19 @@ class SwitchIS(_InfraBase, tag="switchIS", ns=_NS):
     )
 
 
+class CrossingIS(_InfraBase, tag="crossingIS", ns=_NS):
+    """At-grade crossing of two independent lines (valancy = 4 in GTCL).
+
+    A diamond crossing allows two routes to cross without any routing
+    connection between them.  GTCL encodes these as valancy-4 nodes.
+    """
+
+    id: str = attr(name="id", default_factory=_make_id)
+    gml_locations: list[GmlLocation] = element(
+        tag="gmlLocation", ns=_NS, default_factory=list
+    )
+
+
 class BufferStop(_InfraBase, tag="bufferStop", ns=_NS):
     """Terminal end of a track (valancy = 1 in GTCL)."""
 
@@ -245,6 +258,7 @@ class Border(_InfraBase, tag="border", ns=_NS):
 class FunctionalInfrastructure(_Base, tag="functionalInfrastructure", ns=_NS):
     tracks: list[Track] = element(tag="track", ns=_NS, default_factory=list)
     switches: list[SwitchIS] = element(tag="switchIS", ns=_NS, default_factory=list)
+    crossings: list[CrossingIS] = element(tag="crossingIS", ns=_NS, default_factory=list)
     buffer_stops: list[BufferStop] = element(
         tag="bufferStop", ns=_NS, default_factory=list
     )
