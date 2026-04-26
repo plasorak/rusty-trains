@@ -25,14 +25,3 @@ simulation:
         power_ratio: 0.8
         brake_ratio: 0.0
 
-    # Physics train with no route — runs indefinitely as before.
-    - id: "free_runner"
-      kind: railml
-      railml_file: output.xml
-      formation_id: formation_class66_mk3
-      environment:
-        gradient: 0.0
-        wind_speed: 0.0
-      driver:
-        power_ratio: 0.6
-        brake_ratio: 0.0

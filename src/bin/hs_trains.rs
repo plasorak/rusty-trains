@@ -39,15 +39,14 @@ struct Config {
 /// Per-train configuration as written in the YAML file.
 ///
 /// Every train is `kind: railml`: rolling-stock parameters come from a RailML 3.3
-/// formation element.  If `timing_file` is supplied the train's position is taken
-/// from the berth-timing trace whenever the trace has data at the current time;
-/// physics simulation is used as a fallback for any gaps or out-of-range periods.
-/// `driver` and `environment` are therefore always required — they govern the
-/// physics fallback even for timing-traced trains.
+/// formation element and every train must have a `timetable_train_id` that resolves
+/// to a route in the simulation's `infrastructure_file`.  The train stops at the end
+/// of that route.
 ///
-/// If the simulation has an `infrastructure_file` and this train has a
-/// `timetable_train_id`, the train's route is resolved from the RailML timetable
-/// and the train will stop at the end of that route.
+/// If `timing_file` is also supplied the train's position is taken from the
+/// berth-timing trace whenever the trace has data at the current time; physics is
+/// used as a fallback for gaps or out-of-range periods.  `driver` and `environment`
+/// are always required — they govern the physics fallback even for timing-traced trains.
 #[derive(serde::Deserialize)]
 #[serde(tag = "kind")]
 enum TrainConfigYaml {
@@ -63,11 +62,9 @@ enum TrainConfigYaml {
         /// Defaults to the train's `id` field when omitted.
         #[serde(default)]
         timing_train_id: Option<String>,
-        /// Operational train ID in the RailML timetable.
-        /// When set (and `infrastructure_file` is provided at the simulation level)
-        /// the train follows the resolved route and stops at its end.
-        #[serde(default)]
-        timetable_train_id: Option<String>,
+        /// Operational train ID in the RailML timetable. Required.
+        /// The train follows this route and stops at its end.
+        timetable_train_id: String,
         environment: Environment,
         driver: DriverInput,
     },
@@ -81,8 +78,8 @@ struct TrainConfig {
     driver: DriverInput,
     /// Pre-loaded timing trace, if a `timing_file` was specified.
     timing: Option<TimingTrace>,
-    /// Resolved route from the RailML timetable, if `timetable_train_id` was set.
-    route: Option<Route>,
+    /// Resolved route from the RailML timetable.
+    route: Route,
 }
 
 fn resolve_train(yaml: TrainConfigYaml, routes: &HashMap<String, Route>) -> TrainConfig {
@@ -110,17 +107,15 @@ fn resolve_train(yaml: TrainConfigYaml, routes: &HashMap<String, Route>) -> Trai
                     std::process::exit(1)
                 })
             });
-            let route = timetable_train_id.as_deref().and_then(|tt_id| {
-                match routes.get(tt_id) {
-                    Some(r) => Some(r.clone()),
-                    None => {
-                        eprintln!(
-                            "Warning: timetable_train_id '{tt_id}' for train '{id}' not found in timetable — no route assigned"
-                        );
-                        None
-                    }
+            let route = match routes.get(&timetable_train_id) {
+                Some(r) => r.clone(),
+                None => {
+                    eprintln!(
+                        "Error: timetable_train_id '{timetable_train_id}' for train '{id}' not found in timetable"
+                    );
+                    std::process::exit(1)
                 }
-            });
+            };
             TrainConfig { id, train, environment, driver, timing, route }
         }
     }
@@ -140,11 +135,9 @@ struct SimulationConfig {
     /// of the number of trains. Defaults to 1 000 000.
     #[serde(default = "default_flush_rows")]
     flush_rows: usize,
-    /// Path to a RailML 3.3 file containing `<infrastructure>` and optionally
-    /// `<timetable>` sections.  Required when any train specifies a
-    /// `timetable_train_id`.
-    #[serde(default)]
-    infrastructure_file: Option<String>,
+    /// Path to a RailML 3.3 file containing `<infrastructure>` and `<timetable>`
+    /// sections.  Every train's `timetable_train_id` is resolved against this file.
+    infrastructure_file: String,
 }
 
 // ---------------------------------------------------------------------------
@@ -167,21 +160,16 @@ fn main() {
 
     let sim = config.simulation;
 
-    // Load infrastructure + timetable routes if an infrastructure file is given.
-    let routes: HashMap<String, Route> = match &sim.infrastructure_file {
-        None => HashMap::new(),
-        Some(path_str) => {
-            let path = std::path::Path::new(path_str);
-            let infra = railml_infrastructure::load_infrastructure(path).unwrap_or_else(|e| {
-                eprintln!("Error loading infrastructure: {e}");
-                std::process::exit(1)
-            });
-            railml_timetable::load_routes(path, &infra).unwrap_or_else(|e| {
-                eprintln!("Error loading timetable routes: {e}");
-                std::process::exit(1)
-            })
-        }
-    };
+    // Load infrastructure and timetable routes.
+    let path = std::path::Path::new(&sim.infrastructure_file);
+    let infra = railml_infrastructure::load_infrastructure(path).unwrap_or_else(|e| {
+        eprintln!("Error loading infrastructure: {e}");
+        std::process::exit(1)
+    });
+    let routes = railml_timetable::load_routes(path, &infra).unwrap_or_else(|e| {
+        eprintln!("Error loading timetable routes: {e}");
+        std::process::exit(1)
+    });
 
     let trains: Vec<TrainConfig> = sim.trains.into_iter().map(|y| resolve_train(y, &routes)).collect();
     println!(
@@ -227,10 +215,9 @@ fn main() {
 ///                         null AND physics is also unavailable — should not occur)
 /// - `speed_kmh`         — speed in km/h (null when timing position is used)
 /// - `acceleration_mss`  — acceleration in m/s² (null when timing position is used)
-/// - `track_id`          — RailML track id at the current position (null for trains
-///                         without a route)
+/// - `track_id`          — RailML track id at the current position
 /// - `element_offset_m`  — distance from the start of the current track element
-///                         in metres (null for trains without a route)
+///                         in metres
 
 fn build_batch<'a>(
     train_id_data: &[&'a str],
@@ -315,33 +302,20 @@ struct StepRow {
     element_offset_m: Option<f64>,
 }
 
-/// Advance `state` by `dt_i` seconds, honouring the route end if one is set.
+/// Advance `state` by `dt_i` seconds, stopping at the route end.
 ///
 /// If the train has already reached the end of its route the state is left
 /// unchanged.  If the physics step overshoots the route end, position is
 /// clamped and the train is brought to a halt.
-///
-/// For trains with a timing trace and no route the physics position is never
-/// used (the trace overrides `position_m` in `make_step_row`), so we skip the
-/// integration entirely to avoid accumulating floating-point drift in a value
-/// that is always discarded.
 fn advance_with_route(state: &mut SimulatedState, cfg: &TrainConfig, dt_i: f64) {
-    // Timing-only train: physics state is never surfaced, nothing to compute.
-    if cfg.timing.is_some() && cfg.route.is_none() {
-        return;
-    }
-    let at_end = cfg.route.as_ref().map_or(false, |r| state.position.x >= r.total_length_m);
-    if at_end {
+    if state.position.x >= cfg.route.total_length_m {
         return;
     }
     *state = advance_train(state, &cfg.train, &cfg.driver, &cfg.environment, AdvanceTarget::Time(dt_i));
-    // Clamp to route end if the step overshot.
-    if let Some(route) = &cfg.route {
-        if state.position.x >= route.total_length_m {
-            state.position.x = route.total_length_m;
-            state.speed = 0.0;
-            state.acceleration = 0.0;
-        }
+    if state.position.x >= cfg.route.total_length_m {
+        state.position.x = cfg.route.total_length_m;
+        state.speed = 0.0;
+        state.acceleration = 0.0;
     }
 }
 
@@ -350,21 +324,18 @@ fn advance_with_route(state: &mut SimulatedState, cfg: &TrainConfig, dt_i: f64) 
 /// (track_id / element_offset_m) is always derived from whichever position
 /// is reported so that the two columns stay consistent with position_m.
 fn make_step_row(cfg: &TrainConfig, state: &SimulatedState, t: f64) -> StepRow {
+    let locate = |pos: f64| {
+        // route.locate() returns None only for empty routes; routes are always
+        // non-empty at this point (rejected at load time if empty).
+        cfg.route.locate(pos).map(|np| (np.track_id, np.offset_m))
+    };
     match cfg.timing.as_ref().and_then(|tr| tr.position_at(t)) {
         Some(pos) => {
-            let net_pos = cfg.route.as_ref().and_then(|r| r.locate(pos));
-            let (track_id, element_offset_m) = match net_pos {
-                Some(np) => (Some(np.track_id), Some(np.offset_m)),
-                None => (None, None),
-            };
+            let (track_id, element_offset_m) = locate(pos).unzip();
             StepRow { position_m: Some(pos), speed_kmh: None, accel_mss: None, track_id, element_offset_m }
         }
         None => {
-            let net_pos = cfg.route.as_ref().and_then(|r| r.locate(state.position.x));
-            let (track_id, element_offset_m) = match net_pos {
-                Some(np) => (Some(np.track_id), Some(np.offset_m)),
-                None => (None, None),
-            };
+            let (track_id, element_offset_m) = locate(state.position.x).unzip();
             StepRow {
                 position_m: Some(state.position.x),
                 speed_kmh: Some(state.speed * 3.6),
@@ -513,12 +484,7 @@ fn run_simulation(
                 // Schedule the next tick only if it is still within the simulation
                 // window AND there is meaningful work left.
                 let any_active = trains.iter().zip(states.iter()).any(|(cfg, s)| {
-                    cfg.timing.is_some()
-                        || s.speed > 0.0
-                        || cfg
-                            .route
-                            .as_ref()
-                            .map_or(false, |r| s.position.x < r.total_length_m)
+                    cfg.timing.is_some() || s.position.x < cfg.route.total_length_m
                 });
                 if t + dt <= duration && (any_active || !queue.is_empty()) {
                     queue.push(t + dt, None, scheduler::EventKind::PhysicsTick);
@@ -643,18 +609,15 @@ mod tests {
     // --- Config deserialization ----------------------------------------------
 
     #[test]
-    fn test_config_defaults_no_infrastructure() {
+    fn test_config_missing_infrastructure_file_fails() {
+        // infrastructure_file is required; omitting it must fail to deserialize.
         let yaml = r#"
 simulation:
   time_step_s: 0.5
   duration_s: 100.0
   trains: []
 "#;
-        let config: Config = serde_yaml_ng::from_str(yaml).unwrap();
-        assert_eq!(config.simulation.time_step_s, 0.5);
-        assert_eq!(config.simulation.duration_s, 100.0);
-        assert!(config.simulation.infrastructure_file.is_none());
-        assert_eq!(config.simulation.flush_rows, 1_000_000);
+        assert!(serde_yaml_ng::from_str::<Config>(yaml).is_err());
     }
 
     #[test]
@@ -667,10 +630,8 @@ simulation:
   trains: []
 "#;
         let config: Config = serde_yaml_ng::from_str(yaml).unwrap();
-        assert_eq!(
-            config.simulation.infrastructure_file.as_deref(),
-            Some("network.xml")
-        );
+        assert_eq!(config.simulation.infrastructure_file, "network.xml");
+        assert_eq!(config.simulation.flush_rows, 1_000_000);
     }
 
     #[test]
@@ -679,6 +640,7 @@ simulation:
 simulation:
   time_step_s: 1.0
   duration_s: 60.0
+  infrastructure_file: network.xml
   trains:
     - id: express
       kind: railml
@@ -694,15 +656,17 @@ simulation:
 "#;
         let config: Config = serde_yaml_ng::from_str(yaml).unwrap();
         let TrainConfigYaml::RailML { timetable_train_id, .. } = &config.simulation.trains[0];
-        assert_eq!(timetable_train_id.as_deref(), Some("OT_Express"));
+        assert_eq!(timetable_train_id, "OT_Express");
     }
 
     #[test]
-    fn test_config_optional_train_fields_default_to_none() {
+    fn test_config_missing_timetable_train_id_fails() {
+        // timetable_train_id is required; omitting it must fail to deserialize.
         let yaml = r#"
 simulation:
   time_step_s: 1.0
   duration_s: 60.0
+  infrastructure_file: network.xml
   trains:
     - id: plain
       kind: railml
@@ -715,16 +679,34 @@ simulation:
         power_ratio: 1.0
         brake_ratio: 0.0
 "#;
+        assert!(serde_yaml_ng::from_str::<Config>(yaml).is_err());
+    }
+
+    #[test]
+    fn test_config_optional_timing_fields_default_to_none() {
+        // timing_file and timing_train_id are still optional.
+        let yaml = r#"
+simulation:
+  time_step_s: 1.0
+  duration_s: 60.0
+  infrastructure_file: network.xml
+  trains:
+    - id: plain
+      kind: railml
+      railml_file: rs.xml
+      formation_id: f1
+      timetable_train_id: OT_Plain
+      environment:
+        gradient: 0.0
+        wind_speed: 0.0
+      driver:
+        power_ratio: 1.0
+        brake_ratio: 0.0
+"#;
         let config: Config = serde_yaml_ng::from_str(yaml).unwrap();
-        let TrainConfigYaml::RailML {
-            timing_file,
-            timing_train_id,
-            timetable_train_id,
-            ..
-        } = &config.simulation.trains[0];
+        let TrainConfigYaml::RailML { timing_file, timing_train_id, .. } = &config.simulation.trains[0];
         assert!(timing_file.is_none());
         assert!(timing_train_id.is_none());
-        assert!(timetable_train_id.is_none());
     }
 
     #[test]
@@ -734,6 +716,7 @@ simulation:
   time_step_s: 1.0
   duration_s: 10.0
   flush_rows: 500
+  infrastructure_file: network.xml
   trains: []
 "#;
         let config: Config = serde_yaml_ng::from_str(yaml).unwrap();
