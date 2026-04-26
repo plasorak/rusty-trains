@@ -320,7 +320,16 @@ struct StepRow {
 /// If the train has already reached the end of its route the state is left
 /// unchanged.  If the physics step overshoots the route end, position is
 /// clamped and the train is brought to a halt.
+///
+/// For trains with a timing trace and no route the physics position is never
+/// used (the trace overrides `position_m` in `make_step_row`), so we skip the
+/// integration entirely to avoid accumulating floating-point drift in a value
+/// that is always discarded.
 fn advance_with_route(state: &mut SimulatedState, cfg: &TrainConfig, dt_i: f64) {
+    // Timing-only train: physics state is never surfaced, nothing to compute.
+    if cfg.timing.is_some() && cfg.route.is_none() {
+        return;
+    }
     let at_end = cfg.route.as_ref().map_or(false, |r| state.position.x >= r.total_length_m);
     if at_end {
         return;

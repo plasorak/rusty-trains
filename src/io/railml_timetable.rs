@@ -237,16 +237,30 @@ fn parse_routes_xml(
             };
 
             // Determine the BIP sequence-number window.
-            let start_seq = range
-                .start_bip
-                .as_deref()
-                .and_then(|id| bip_seq.get(id).copied())
-                .unwrap_or(0);
-            let end_seq = range
-                .end_bip
-                .as_deref()
-                .and_then(|id| bip_seq.get(id).copied())
-                .unwrap_or(u32::MAX);
+            let start_seq = match &range.start_bip {
+                None => 0,
+                Some(id) => match bip_seq.get(id.as_str()).copied() {
+                    Some(s) => s,
+                    None => {
+                        eprintln!(
+                            "Warning: start BIP '{id}' in range for train '{ot_id}' not found — defaulting to start of base itinerary"
+                        );
+                        0
+                    }
+                },
+            };
+            let end_seq = match &range.end_bip {
+                None => u32::MAX,
+                Some(id) => match bip_seq.get(id.as_str()).copied() {
+                    Some(s) => s,
+                    None => {
+                        eprintln!(
+                            "Warning: end BIP '{id}' in range for train '{ot_id}' not found — defaulting to end of base itinerary"
+                        );
+                        u32::MAX
+                    }
+                },
+            };
 
             for (bip_seq_n, _bip_id, track_ids) in bi_points {
                 if *bip_seq_n < start_seq || *bip_seq_n > end_seq {
