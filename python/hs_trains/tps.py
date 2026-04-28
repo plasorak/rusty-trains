@@ -75,12 +75,7 @@ from hs_trains.model.infrastructure import (
 from hs_trains.model.common import Name
 
 TPS_XML = Path(__file__).parents[2] / "assets" / "XML_p.xml"
-WAYMARKS_SHP = (
-    Path(__file__).parents[2]
-    / "assets"
-    / "NWR_TrackModel20250210 20250306"
-    / "NWR_Waymarks.shp"
-)
+WAYMARKS_SHP = Path(__file__).parents[2] / "assets" / "NWR_Waymarks.shp"
 
 # Reusable BNG → WGS84 transformer (always_xy=True: input is easting/northing,
 # output is lon/lat as required by GML srsName=EPSG:4326).
@@ -293,7 +288,7 @@ def load_tps(xml_path: Path = TPS_XML) -> TpsData:
             # so stale data from a previous element can't leak into the next.
             if depth == 2:
                 _pending_kmregion_id = ""
-                _pending_km_value_m = 0
+                _pending_km_value_m = 0.0
         else:  # "end"
             if depth == 3:
                 # Read interesting depth-3 children before clearing.
