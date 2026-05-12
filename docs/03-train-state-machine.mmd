@@ -1,0 +1,25 @@
+stateDiagram-v2
+  direction TB
+  [*] --> Stabled
+  Stabled --> ReadyToDepart : service activated
+  ReadyToDepart --> Running : signal proceeds
+  ReadyToDepart --> ReadyToDepart : held (await connection)
+
+  Running --> Braking : restrictive aspect ahead
+  Braking --> Running : aspect upgraded
+  Braking --> Stopped : reached signal at danger
+  Stopped --> Running : aspect upgraded
+
+  Running --> Dwelling : arrived at booked stop
+  Dwelling --> Dwelling : dwell extended (perturbation)
+  Dwelling --> Coupling : connection requires linking
+  Coupling --> Dwelling : coupled
+  Dwelling --> ReadyToDepart : dwell complete
+
+  Running --> Terminated : reached destination
+  Dwelling --> Terminated : reached destination
+  Terminated --> [*]
+
+  Running --> Cancelled : controller cancels
+  Dwelling --> Cancelled : controller cancels
+  Cancelled --> [*]

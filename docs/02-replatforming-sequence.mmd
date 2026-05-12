@@ -1,0 +1,32 @@
+sequenceDiagram
+  participant Q as Event queue
+  participant T as Train 1A23
+  participant Ctrl as Controller
+  participant IL as Interlocking
+  participant W as WorldState
+  participant Log as Event log
+
+  Note over Q,Log: Train 1A23 booked Platform 3, but Platform 3 occupied
+
+  Q->>T: TrainApproaching(station)
+  T->>W: read signal aspect ahead
+  W-->>T: aspect = caution
+  T->>Q: schedule BrakeApplied(t+2s)
+
+  Q->>Ctrl: TrainApproaching(1A23, station)
+  Ctrl->>W: query platform availability
+  W-->>Ctrl: P3 occupied by 2B45, P5 free
+  Ctrl->>Ctrl: decide Replatform to P5
+  Ctrl->>IL: Replatform(1A23, P5)
+  IL->>IL: validate route to P5 clear
+  IL->>W: lock points, update signals
+  IL-->>Ctrl: Ok
+  Ctrl->>Q: schedule SetRoute(t+0)
+  Ctrl->>Log: emit ReplatformDecision
+
+  Q->>T: SignalChanged(proceed)
+  T->>W: read updated aspect
+  W-->>T: aspect = proceed
+  T->>Q: schedule ArrivedAt(P5, t+45s)
+
+  Note over T,Log: Passenger subscribers see ReplatformDecision<br/>and re-plan affected journeys

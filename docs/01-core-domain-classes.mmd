@@ -1,0 +1,97 @@
+classDiagram
+  direction TB
+
+  class Train {
+    +TrainId id
+    +RollingStock stock
+    +DynamicsMode mode
+    +Kinematics state
+    +TrainId~Option~ coupled_to
+    +step(dt) Vec~Event~
+    +brake_target(aspect) f64
+  }
+
+  class RollingStock {
+    +f64 mass_t
+    +f64 length_m
+    +f64 max_speed_ms
+    +DavisCoeffs davis
+    +TractiveCurve tractive
+  }
+
+  class DavisCoeffs {
+    +f64 a
+    +f64 b
+    +f64 c
+    +resistance(v) f64
+  }
+
+  class DynamicsMode {
+    <<enumeration>>
+    Physical
+    Scripted
+    Hybrid
+  }
+
+  class Kinematics {
+    +f64 position_m
+    +f64 velocity_ms
+    +NodeId current_segment
+  }
+
+  class Controller {
+    <<trait>>
+    +on_event(ev, world) Vec~Action~
+  }
+
+  class TimetableController {
+    +Timetable timetable
+    +on_event(ev, world) Vec~Action~
+  }
+
+  class ReactiveController {
+    +RuleSet rules
+    +on_event(ev, world) Vec~Action~
+  }
+
+  class Action {
+    <<enumeration>>
+    SetRoute
+    Replatform
+    HoldTrain
+    CancelService
+  }
+
+  class Interlocking {
+    +Vec~Route~ active_routes
+    +apply(action) Result
+    +is_route_free(route) bool
+  }
+
+  class Event {
+    <<enumeration>>
+    TrainArrived
+    TrainDeparted
+    SignalChanged
+    DwellExtended
+    PerturbationFired
+  }
+
+  class WorldState {
+    +HashMap~TrainId,Train~ trains
+    +HashMap~SignalId,Aspect~ signals
+    +HashMap~PointId,Position~ points
+    +Time now
+  }
+
+  Train *-- RollingStock
+  Train *-- Kinematics
+  Train --> DynamicsMode
+  RollingStock *-- DavisCoeffs
+  Controller <|.. TimetableController
+  Controller <|.. ReactiveController
+  Controller ..> Action : emits
+  Controller ..> Event : consumes
+  Interlocking ..> Action : applies
+  Interlocking --> WorldState : mutates
+  WorldState o-- Train
