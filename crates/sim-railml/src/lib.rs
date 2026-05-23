@@ -1,10 +1,4 @@
-pub struct Placeholder;
+pub mod infrastructure;
+mod xml_util;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn placeholder() {
-        let _ = Placeholder;
-    }
-}
+pub use infrastructure::{Infrastructure, NetElement, OperationalPoint, Platform, Signal, Track};
