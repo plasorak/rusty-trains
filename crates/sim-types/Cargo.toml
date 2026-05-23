@@ -1,0 +1,8 @@
+[package]
+name = "sim-types"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+geo = "0.33.1"
+uom = "0.38.0"

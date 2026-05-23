@@ -162,14 +162,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hs-trains"
-version = "0.1.0"
-dependencies = [
- "geo",
- "uom",
-]
-
-[[package]]
 name = "i_float"
 version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -351,6 +343,58 @@ name = "sif-itree"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7f45b8998ced5134fb1d75732c77842a3e888f19c1ff98481822e8fbfbf930b"
+
+[[package]]
+name = "sim-control"
+version = "0.1.0"
+
+[[package]]
+name = "sim-engine"
+version = "0.1.0"
+
+[[package]]
+name = "sim-events"
+version = "0.1.0"
+
+[[package]]
+name = "sim-infra"
+version = "0.1.0"
+
+[[package]]
+name = "sim-passenger"
+version = "0.1.0"
+
+[[package]]
+name = "sim-perturb"
+version = "0.1.0"
+
+[[package]]
+name = "sim-physics"
+version = "0.1.0"
+
+[[package]]
+name = "sim-railml"
+version = "0.1.0"
+
+[[package]]
+name = "sim-runner"
+version = "0.1.0"
+
+[[package]]
+name = "sim-timetable"
+version = "0.1.0"
+
+[[package]]
+name = "sim-train"
+version = "0.1.0"
+
+[[package]]
+name = "sim-types"
+version = "0.1.0"
+dependencies = [
+ "geo",
+ "uom",
+]
 
 [[package]]
 name = "smallvec"

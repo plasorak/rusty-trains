@@ -1,8 +1,16 @@
-[package]
-name = "hs-trains"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-geo = "0.33.1"
-uom = "0.38.0"
+[workspace]
+resolver = "2"
+members = [
+    "crates/sim-types",
+    "crates/sim-events",
+    "crates/sim-railml",
+    "crates/sim-infra",
+    "crates/sim-timetable",
+    "crates/sim-train",
+    "crates/sim-physics",
+    "crates/sim-passenger",
+    "crates/sim-engine",
+    "crates/sim-control",
+    "crates/sim-perturb",
+    "crates/sim-runner",
+]
